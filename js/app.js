@@ -76,7 +76,7 @@ const saveToStorage = (todos) => {
  * @returns {string} Benzersiz ID
  */
 const generateId = () => {
-    return Date.now().toString(36) + Math.random().toString(36).substr(2);
+    return Date.now().toString(36) + Math.random().toString(36).slice(2);
 };
 
 /**
@@ -217,6 +217,7 @@ const setFilter = (filter) => {
     });
     
     renderTodos();
+    updateStats();
 };
 
 /**
@@ -238,8 +239,18 @@ const getFilteredTodos = () => {
 // Drag and Drop Functions
 // ========================================
 
-let draggedItem = null;
-let draggedIndex = null;
+// Suruklenen todo'nun ID'si (DOM indeksi yerine ID kullaniyoruz; boylece
+// filtre aktifken de dogru ogeyi tasiriz)
+let draggedId = null;
+
+/**
+ * Suruklenen ogedeki gorsel geri bildirimi temizler
+ */
+const clearDragIndicators = () => {
+    elements.todoList.querySelectorAll('.drag-over-top, .drag-over-bottom').forEach(item => {
+        item.classList.remove('drag-over-top', 'drag-over-bottom');
+    });
+};
 
 /**
  * Drag basladiginda
@@ -248,13 +259,11 @@ let draggedIndex = null;
 const handleDragStart = (event) => {
     const todoItem = event.target.closest('.todo-item');
     if (!todoItem) return;
-    
-    draggedItem = todoItem;
-    draggedIndex = [...elements.todoList.children].indexOf(todoItem);
-    
+
+    draggedId = todoItem.dataset.id;
     todoItem.classList.add('dragging');
     event.dataTransfer.effectAllowed = 'move';
-    event.dataTransfer.setData('text/plain', todoItem.dataset.id);
+    event.dataTransfer.setData('text/plain', draggedId);
 };
 
 /**
@@ -264,21 +273,15 @@ const handleDragStart = (event) => {
 const handleDragOver = (event) => {
     event.preventDefault();
     event.dataTransfer.dropEffect = 'move';
-    
+
     const todoItem = event.target.closest('.todo-item');
-    if (todoItem && todoItem !== draggedItem) {
-        const rect = todoItem.getBoundingClientRect();
-        const midY = rect.top + rect.height / 2;
-        
-        // Ust veya alt tarafi belirle
-        if (event.clientY < midY) {
-            todoItem.style.borderTopColor = 'var(--color-accent)';
-            todoItem.style.borderBottomColor = '';
-        } else {
-            todoItem.style.borderBottomColor = 'var(--color-accent)';
-            todoItem.style.borderTopColor = '';
-        }
-    }
+    if (!todoItem || todoItem.dataset.id === draggedId) return;
+
+    const rect = todoItem.getBoundingClientRect();
+    const isAbove = event.clientY < rect.top + rect.height / 2;
+
+    todoItem.classList.toggle('drag-over-top', isAbove);
+    todoItem.classList.toggle('drag-over-bottom', !isAbove);
 };
 
 /**
@@ -288,66 +291,53 @@ const handleDragOver = (event) => {
 const handleDragLeave = (event) => {
     const todoItem = event.target.closest('.todo-item');
     if (todoItem) {
-        todoItem.style.borderTopColor = '';
-        todoItem.style.borderBottomColor = '';
+        todoItem.classList.remove('drag-over-top', 'drag-over-bottom');
     }
 };
 
 /**
- * Drop yapildiginda
+ * Drop yapildiginda - state.todos'u ID'ler uzerinden yeniden siralar
  * @param {DragEvent} event
  */
 const handleDrop = (event) => {
     event.preventDefault();
-    
+
     const todoItem = event.target.closest('.todo-item');
-    if (!todoItem || todoItem === draggedItem) return;
-    
+    if (!todoItem) return;
+
+    const targetId = todoItem.dataset.id;
+    if (!targetId || targetId === draggedId) return;
+
     const rect = todoItem.getBoundingClientRect();
-    const midY = rect.top + rect.height / 2;
-    const dropIndex = [...elements.todoList.children].indexOf(todoItem);
-    const insertAfter = event.clientY > midY;
-    
-    // Todo'yu yeni pozisyona tasi
-    const draggedTodo = state.todos.splice(draggedIndex, 1)[0];
-    const newIndex = insertAfter ? dropIndex : dropIndex;
-    
-    // Filtrelenmis liste kullaniliyorsa gercek index'i bul
-    const filteredTodos = getFilteredTodos();
-    const targetTodo = filteredTodos[dropIndex];
-    const realNewIndex = state.todos.findIndex(t => t.id === targetTodo?.id);
-    
-    if (realNewIndex !== -1) {
-        state.todos.splice(insertAfter ? realNewIndex + 1 : realNewIndex, 0, draggedTodo);
-    } else {
+    const insertAfter = event.clientY > rect.top + rect.height / 2;
+
+    const draggedPos = state.todos.findIndex(todo => todo.id === draggedId);
+    if (draggedPos === -1) return;
+
+    const [draggedTodo] = state.todos.splice(draggedPos, 1);
+
+    const targetPos = state.todos.findIndex(todo => todo.id === targetId);
+    if (targetPos === -1) {
         state.todos.push(draggedTodo);
+    } else {
+        state.todos.splice(insertAfter ? targetPos + 1 : targetPos, 0, draggedTodo);
     }
-    
+
     saveToStorage(state.todos);
     renderTodos();
-    
-    // Border stillerini temizle
-    todoItem.style.borderTopColor = '';
-    todoItem.style.borderBottomColor = '';
+    clearDragIndicators();
 };
 
 /**
- * Drag bittiginde
- * @param {DragEvent} event
+ * Drag bittiginde tum gorsel durumlari temizler
  */
-const handleDragEnd = (event) => {
+const handleDragEnd = () => {
+    const draggedItem = elements.todoList.querySelector('.dragging');
     if (draggedItem) {
         draggedItem.classList.remove('dragging');
     }
-    
-    // Tum border stillerini temizle
-    elements.todoList.querySelectorAll('.todo-item').forEach(item => {
-        item.style.borderTopColor = '';
-        item.style.borderBottomColor = '';
-    });
-    
-    draggedItem = null;
-    draggedIndex = null;
+    clearDragIndicators();
+    draggedId = null;
 };
 
 // ========================================
@@ -576,7 +566,6 @@ const handleFilterClick = (event) => {
     const filter = event.target.dataset.filter;
     if (filter) {
         setFilter(filter);
-        updateStats();
     }
 };
 
