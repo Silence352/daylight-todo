@@ -1,10 +1,10 @@
 # Simple To-Do List — Step-by-Step Build Guide
 
-> **Archived: original build playbook.** Bu belge, Simple To-Do List uygulamasını sıfırdan inşa etmek için kullanılan orijinal yol haritasıdır. Kod tabanı bu kılavuz yazıldıktan sonra gelişmiş olabilir (örneğin sürükle-bırak mantığı ID tabanlı olacak şekilde yeniden yazılmıştır). Güncel kurulum, mimari ve dağıtım notları için bkz. [../README.md](../README.md).
+> **Archived: original build playbook.** This document is the original roadmap used to build the Simple To-Do List application. The codebase may have evolved since this guide was written (for example, the drag-and-drop logic has been rewritten to be ID-based). For current setup, architecture, and deployment notes, see [../README.md](../README.md).
 
 ---
 
-> **Project Summary:** Simple To-Do List, hiçbir harici bağımlılığı olmayan, tamamen istemci tarafında çalışan modern bir görev yönetim uygulamasıdır. Kullanıcılar görev ekleyebilir, tamamlandı olarak işaretleyebilir, satır içi düzenleyebilir, silebilir, sürükle-bırak ile yeniden sıralayabilir ve görevleri Tümü / Aktif / Tamamlanan filtreleriyle görüntüleyebilir. Veriler tarayıcının `localStorage` API'si ile kalıcı olarak saklanır. Tek bir merkezi `state` objesi, event delegation ve `escapeHtml` ile XSS koruması uygulamanın çekirdeğini oluşturur. Koyu tema, CSS değişkenleri üzerine kurulmuştur; erişilebilirlik (ARIA, klavye navigasyonu, `:focus-visible`) ve responsive tasarım öncelikli tutulmuştur.
+> **Project Summary:** Simple To-Do List is a fully client-side, modern task management application with zero external dependencies. Users can add tasks, mark them as completed, edit them inline, delete them, reorder them via drag-and-drop, and view tasks through All / Active / Completed filters. Data is persisted with the browser's `localStorage` API. A single centralized `state` object, event delegation, and XSS protection via `escapeHtml` form the core of the application. The dark theme is built on CSS custom properties; accessibility (ARIA, keyboard navigation, `:focus-visible`) and responsive design are treated as first-class concerns.
 
 Each step below is a self-contained prompt. Execute them in order.
 Stack: HTML5, CSS3 (Custom Properties, Flexbox, Animations), Vanilla JavaScript (ES6+), LocalStorage API, Google Fonts (Outfit, JetBrains Mono).
@@ -74,7 +74,7 @@ flowchart LR
     Fonts[Google Fonts] -.->|@import| UI
 ```
 
-Uygulama üç katmandan oluşur: sunum (`index.html`), stil (`css/style.css`) ve mantık (`js/app.js`). Tüm durum bellekteki tek bir `state` objesinde tutulur; her değişiklikte `state` `localStorage`'a serileştirilir ve arayüz yeniden render edilir. Backend, veritabanı veya ağ çağrısı yoktur — uygulama tamamen çevrimdışı çalışır.
+The application has three layers: presentation (`index.html`), styling (`css/style.css`), and logic (`js/app.js`). All state lives in a single in-memory `state` object; on every change the `state` is serialized to `localStorage` and the UI is re-rendered. There is no backend, database, or network call — the app runs entirely offline.
 
 ---
 
@@ -84,7 +84,7 @@ Uygulama üç katmandan oluşur: sunum (`index.html`), stil (`css/style.css`) ve
 
 ## STEP 1 — Project Scaffolding & File Structure
 
-**Goal:** Minimal, ölçeklenebilir bir klasör yapısı oluştur.
+**Goal:** Create a minimal, scalable folder structure.
 
 **Files/folders to create:**
 
@@ -100,40 +100,40 @@ simple-to-do-list/
 
 **Implementation notes:**
 
-- Build aracı, paket yöneticisi veya transpiler kullanma. Dosyalar tarayıcıda doğrudan açılabilir olmalı.
-- CSS ve JS, HTML'e harici dosyalar olarak bağlanır (`<link>` ve `<script src>`). Inline stil/script kullanma.
+- Do not use a build tool, package manager, or transpiler. The files must be openable directly in the browser.
+- CSS and JS are linked as external files in the HTML (`<link>` and `<script src>`). Do not use inline styles/scripts.
 
 **Acceptance checklist:**
 
-- [ ] `index.html` tarayıcıda açıldığında 404 vermeden `css/style.css` ve `js/app.js` yükleniyor.
-- [ ] Konsol hatası yok.
+- [ ] When `index.html` is opened in the browser, `css/style.css` and `js/app.js` load without 404 errors.
+- [ ] No console errors.
 
 ---
 
 ## STEP 2 — Semantic HTML Skeleton
 
-**Goal:** Erişilebilir, anlamsal HTML iskeletini kur.
+**Goal:** Build an accessible, semantic HTML skeleton.
 
 **Files to edit:** `index.html`
 
 **Implementation notes:**
 
-- `<html lang="tr">`, `<meta charset>`, `<meta name="viewport">` ve açıklayıcı bir `<meta name="description">` ekle.
-- Google Fonts için `preconnect` linkleri ve Outfit + JetBrains Mono `@import`'unu `<head>`'e ekle.
-- Sayfa bölümlerini anlamsal etiketlerle yapılandır:
-  - `<header>`: başlık ve alt başlık.
-  - `<section class="add-todo-section">`: `<form id="todoForm">` + metin girişi + "Ekle" butonu.
-  - `<section class="filters-section">`: `role="tablist"` ile filtre butonları (`data-filter="all|active|completed"`) ve görev sayacı.
-  - `<section class="todo-list-section">`: `<ul id="todoList">` ve `#emptyState` boş durum bloğu.
-  - `<footer>`: "Tamamlananları Temizle" butonu.
-- Tüm etkileşimli elementlere `aria-label` ekle. Filtre butonlarına `role="tab"` ve `aria-selected` ver.
-- Input'a `maxlength="150"` ve `autocomplete="off"` ekle.
+- Add `<html lang="en">`, `<meta charset>`, `<meta name="viewport">`, and a descriptive `<meta name="description">`.
+- Add `preconnect` links for Google Fonts and the Outfit + JetBrains Mono `@import` in the `<head>`.
+- Structure the page sections with semantic tags:
+  - `<header>`: title and subtitle.
+  - `<section class="add-todo-section">`: `<form id="todoForm">` + text input + "Add" button.
+  - `<section class="filters-section">`: filter buttons with `role="tablist"` (`data-filter="all|active|completed"`) and a task counter.
+  - `<section class="todo-list-section">`: `<ul id="todoList">` and the `#emptyState` empty-state block.
+  - `<footer>`: "Clear Completed" button.
+- Add `aria-label` to every interactive element. Give filter buttons `role="tab"` and `aria-selected`.
+- Add `maxlength="150"` and `autocomplete="off"` to the input.
 
 **Acceptance checklist:**
 
-- [ ] Tüm bölümler anlamsal etiketlerle mevcut.
-- [ ] Form, input ve butonların `aria-label`'ları var.
-- [ ] Sayfa klavyeyle (Tab) gezilebiliyor.
+- [ ] All sections exist with semantic tags.
+- [ ] The form, input, and buttons have `aria-label`s.
+- [ ] The page is navigable with the keyboard (Tab).
 
 ---
 
@@ -143,42 +143,42 @@ simple-to-do-list/
 
 ## STEP 3 — CSS Variables & Reset
 
-**Goal:** Tema tokenlarını ve temel sıfırlamayı tanımla.
+**Goal:** Define theme tokens and a base reset.
 
 **Files to edit:** `css/style.css`
 
 **Implementation notes:**
 
-- `:root` içinde tüm tasarım tokenlarını CSS Custom Properties olarak tanımla: arka plan renkleri, accent renkler, metin renkleri, durum renkleri (success/danger/warning), border, shadow, border-radius, geçiş süreleri ve font değişkenleri (bkz. Appendix A).
-- Evrensel reset uygula: `*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }`.
-- `body`'ye koyu tema arka planı, radial/linear gradient deseni ve flexbox merkezleme ekle.
-- Erişilebilirlik için `:focus-visible` outline ve `::selection` stillerini tanımla.
+- Define all design tokens as CSS Custom Properties inside `:root`: background colors, accent colors, text colors, status colors (success/danger/warning), border, shadow, border-radius, transition durations, and font variables (see Appendix A).
+- Apply a universal reset: `*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }`.
+- Give `body` a dark-theme background, a radial/linear gradient pattern, and flexbox centering.
+- Define `:focus-visible` outline and `::selection` styles for accessibility.
 
 **Acceptance checklist:**
 
-- [ ] Renkler yalnızca `var(--token)` üzerinden kullanılıyor (hardcoded hex tekrarları yok).
-- [ ] Klavye odağı görsel olarak belirgin.
+- [ ] Colors are used only through `var(--token)` (no repeated hardcoded hex values).
+- [ ] Keyboard focus is visually prominent.
 
 ---
 
 ## STEP 4 — Layout, Components & Animations
 
-**Goal:** Tüm görsel bileşenleri ve animasyonları stille.
+**Goal:** Style all visual components and animations.
 
 **Files to edit:** `css/style.css`
 
 **Implementation notes:**
 
-- `.app-container`'ı maksimum genişlikle (560px) ortala; giriş animasyonu (`fadeInUp`) ekle.
-- Bileşen stilleri: form, input, butonlar (`.btn-add`, `.btn-clear`), filtre pill'leri, `.todo-item`, özel yuvarlak checkbox, `.todo-text`, `.todo-edit-input`, hover ile beliren `.todo-actions`, `.drag-handle`, `.empty-state`.
-- Animasyonlar: `slideIn`, `slideOut`, `fadeIn`, `fadeInUp`. Geçişler `var(--transition-*)` kullanmalı.
-- Sürükle-bırak görsel geri bildirimi için class tabanlı göstergeler tanımla: `.todo-item.dragging`, `.todo-item.drag-over-top`, `.todo-item.drag-over-bottom` (inline stil enjeksiyonu yerine).
-- Tamamlanmış görev için `.completed` üzerinde `line-through` ve azaltılmış opaklık.
+- Center `.app-container` with a max width (560px); add an entrance animation (`fadeInUp`).
+- Component styles: form, input, buttons (`.btn-add`, `.btn-clear`), filter pills, `.todo-item`, custom round checkbox, `.todo-text`, `.todo-edit-input`, hover-revealed `.todo-actions`, `.drag-handle`, `.empty-state`.
+- Animations: `slideIn`, `slideOut`, `fadeIn`, `fadeInUp`. Transitions must use `var(--transition-*)`.
+- Define class-based indicators for drag-and-drop visual feedback: `.todo-item.dragging`, `.todo-item.drag-over-top`, `.todo-item.drag-over-bottom` (instead of inline style injection).
+- Apply `line-through` and reduced opacity on `.completed` for completed tasks.
 
 **Acceptance checklist:**
 
-- [ ] Hover, focus ve completed durumları görsel olarak ayırt edilebiliyor.
-- [ ] Görsel sürükleme geri bildirimi CSS class'larıyla yapılıyor, JS inline stil yazmıyor.
+- [ ] Hover, focus, and completed states are visually distinguishable.
+- [ ] Drag visual feedback is done with CSS classes; JS does not write inline styles.
 
 ---
 
@@ -188,41 +188,41 @@ simple-to-do-list/
 
 ## STEP 5 — State Management & LocalStorage
 
-**Goal:** Merkezi durum ve kalıcılık katmanını kur.
+**Goal:** Set up the centralized state and persistence layer.
 
 **Files to edit:** `js/app.js`
 
 **Implementation notes:**
 
-- Tek bir `state` objesi tanımla: `{ todos: [], currentFilter: 'all', editingId: null }`.
-- `STORAGE_KEY` sabitini tanımla (`'simple-todo-list'`).
-- DOM referanslarını tek bir `elements` objesinde topla.
-- `loadFromStorage()` ve `saveToStorage(todos)` fonksiyonlarını `try/catch` ile yaz; okuma hatasında boş dizi döndür.
+- Define a single `state` object: `{ todos: [], currentFilter: 'all', editingId: null }`.
+- Define the `STORAGE_KEY` constant (`'simple-todo-list'`).
+- Collect DOM references in a single `elements` object.
+- Write `loadFromStorage()` and `saveToStorage(todos)` with `try/catch`; return an empty array on read errors.
 
 **Acceptance checklist:**
 
-- [ ] Sayfa yenilendiğinde görevler korunuyor.
-- [ ] `localStorage` bozuk/erişilemez olduğunda uygulama çökmüyor.
+- [ ] Tasks persist when the page is refreshed.
+- [ ] The app does not crash when `localStorage` is corrupted/unavailable.
 
 ---
 
 ## STEP 6 — CRUD Operations
 
-**Goal:** Görev oluşturma, okuma, güncelleme ve silme mantığını yaz.
+**Goal:** Write the create, read, update, and delete logic for tasks.
 
 **Files to edit:** `js/app.js`
 
 **Implementation notes:**
 
-- `generateId()`: `Date.now().toString(36) + Math.random().toString(36).slice(2)` (deprecated `substr` kullanma).
-- `addTodo(text)`: metni `trim` et, boşsa yoksay, yeni todo'yu `state.todos`'un başına ekle (`unshift`), kaydet ve render et.
-- `toggleTodo(id)`, `deleteTodo(id)` (çıkış animasyonu ile), `clearCompleted()`.
-- Her mutasyon sonrası: `saveToStorage` → `renderTodos` → `updateStats`.
+- `generateId()`: `Date.now().toString(36) + Math.random().toString(36).slice(2)` (do not use the deprecated `substr`).
+- `addTodo(text)`: `trim` the text, ignore if empty, prepend the new todo to `state.todos` (`unshift`), save, and render.
+- `toggleTodo(id)`, `deleteTodo(id)` (with exit animation), `clearCompleted()`.
+- After each mutation: `saveToStorage` → `renderTodos` → `updateStats`.
 
 **Acceptance checklist:**
 
-- [ ] Görev ekleme/silme/işaretleme anında arayüze ve `localStorage`'a yansıyor.
-- [ ] Boş veya yalnızca boşluktan oluşan metin eklenemiyor.
+- [ ] Adding/deleting/toggling a task is reflected instantly in the UI and in `localStorage`.
+- [ ] Empty or whitespace-only text cannot be added.
 
 ---
 
@@ -232,79 +232,79 @@ simple-to-do-list/
 
 ## STEP 7 — Rendering & XSS-Safe Templates
 
-**Goal:** Görev listesini güvenli şekilde render et.
+**Goal:** Render the task list safely.
 
 **Files to edit:** `js/app.js`
 
 **Implementation notes:**
 
-- `escapeHtml(text)`: bir `<div>` oluşturup `textContent` atayarak `innerHTML` döndür. DOM'a yazılan tüm kullanıcı metinleri bundan geçmeli.
-- `createTodoItemHTML(todo)`: düzenleme modu ve normal mod için ayrı şablonlar döndüren saf fonksiyon.
-- `renderTodos()`: filtrelenmiş listeyi üret, boşsa `#emptyState`'i göster, aksi halde `innerHTML`'i doldur ve `dragstart`/`dragend` dinleyicilerini bağla.
+- `escapeHtml(text)`: create a `<div>`, assign `textContent`, and return `innerHTML`. Every user text written to the DOM must pass through this.
+- `createTodoItemHTML(todo)`: a pure function returning separate templates for edit mode and normal mode.
+- `renderTodos()`: build the filtered list, show `#emptyState` if empty, otherwise fill `innerHTML` and bind `dragstart`/`dragend` listeners.
 
 **Acceptance checklist:**
 
-- [ ] `<img src=x onerror=alert(1)>` gibi bir girdi metin olarak görüntüleniyor, çalışmıyor.
-- [ ] Liste boşken boş durum bloğu görünüyor.
+- [ ] An input like `<img src=x onerror=alert(1)>` is displayed as text and does not execute.
+- [ ] The empty-state block appears when the list is empty.
 
 ---
 
 ## STEP 8 — Filters & Statistics
 
-**Goal:** Filtreleme ve canlı sayaç.
+**Goal:** Filtering and a live counter.
 
 **Files to edit:** `js/app.js`
 
 **Implementation notes:**
 
-- `setFilter(filter)`: `state.currentFilter`'ı güncelle, aktif buton class'ını ve `aria-selected`'ı ayarla, ardından `renderTodos()` ve `updateStats()` çağır (sayaç güncellemesini tek noktada tut — DRY).
-- `getFilteredTodos()`: `currentFilter`'a göre filtrelenmiş dizi döndür.
-- `updateStats()`: filtreye göre sayaç metnini yaz ve tamamlanan varsa "Temizle" butonunu göster.
+- `setFilter(filter)`: update `state.currentFilter`, set the active button class and `aria-selected`, then call `renderTodos()` and `updateStats()` (keep the counter update in a single place — DRY).
+- `getFilteredTodos()`: return a filtered array based on `currentFilter`.
+- `updateStats()`: write the counter text based on the filter and show the "Clear" button when there are completed tasks.
 
 **Acceptance checklist:**
 
-- [ ] Filtre değişiminde sayaç metni doğru güncelleniyor.
-- [ ] Tamamlanan görev yokken "Temizle" butonu gizli.
+- [ ] The counter text updates correctly when the filter changes.
+- [ ] The "Clear" button is hidden when there are no completed tasks.
 
 ---
 
 ## STEP 9 — Inline Editing & Keyboard Support
 
-**Goal:** Modal olmadan satır içi düzenleme.
+**Goal:** Inline editing without a modal.
 
 **Files to edit:** `js/app.js`
 
 **Implementation notes:**
 
-- `startEditTodo(id)`: `state.editingId`'i ayarla, yeniden render et, edit input'a focus ver ve imleci sona taşı.
-- `saveEditTodo(id, newText)` (boşsa iptal) ve `cancelEditTodo()`.
-- Event delegation: `todoList` üzerinde tek `click` dinleyicisi `data-action` (`toggle|edit|delete|save|cancel`) ile yönlendirme yapar.
-- `keydown`: edit input'ta `Enter` kaydeder, `Escape` iptal eder.
+- `startEditTodo(id)`: set `state.editingId`, re-render, focus the edit input, and move the caret to the end.
+- `saveEditTodo(id, newText)` (cancel if empty) and `cancelEditTodo()`.
+- Event delegation: a single `click` listener on `todoList` routes by `data-action` (`toggle|edit|delete|save|cancel`).
+- `keydown`: `Enter` saves and `Escape` cancels in the edit input.
 
 **Acceptance checklist:**
 
-- [ ] Düzenleme Enter ile kaydediliyor, Escape ile iptal ediliyor.
-- [ ] Boş metinle kaydetme düzenlemeyi iptal ediyor.
+- [ ] Editing is saved with Enter and canceled with Escape.
+- [ ] Saving with empty text cancels the edit.
 
 ---
 
 ## STEP 10 — Drag & Drop Reordering
 
-**Goal:** Görevleri sürükle-bırak ile yeniden sırala (filtre aktifken bile doğru çalışmalı).
+**Goal:** Reorder tasks via drag-and-drop (must work correctly even when a filter is active).
 
 **Files to edit:** `js/app.js`, `css/style.css`
 
 **Implementation notes:**
 
-- DOM indeksine değil, **todo ID'sine** dayan. `dragstart`'ta `draggedId`'i sakla.
-- `dragover`: hedef öğenin orta noktasına göre `.drag-over-top` / `.drag-over-bottom` class'ını toggle et.
-- `drop`: `draggedId`'i `state.todos` içinde bul ve çıkar; hedef ID'nin gerçek pozisyonuna göre `insertAfter`'a bakarak yeniden ekle. Bu yaklaşım, filtrelenmiş görünümde de doğru öğeyi taşır.
-- `dragend` ve `clearDragIndicators()` ile tüm görsel durumları temizle.
+- Rely on the **todo ID**, not the DOM index. Store `draggedId` on `dragstart`.
+- `dragover`: toggle `.drag-over-top` / `.drag-over-bottom` on the target based on the cursor position relative to its midpoint.
+- `drop`: find and remove `draggedId` from `state.todos`; re-insert based on the target ID's real position and `insertAfter`. This approach moves the correct item even in a filtered view.
+- Clear all visual state with `dragend` and `clearDragIndicators()`.
 
 **Acceptance checklist:**
 
-- [ ] "Aktif" veya "Tamamlanan" filtresi açıkken sürükleme yanlış öğeyi taşımıyor.
-- [ ] Sürükleme sonrası yeni sıra `localStorage`'a yazılıyor.
+- [ ] Dragging does not move the wrong item when the "Active" or "Completed" filter is open.
+- [ ] The new order is written to `localStorage` after dragging.
 
 ---
 
@@ -314,37 +314,37 @@ simple-to-do-list/
 
 ## STEP 11 — Accessibility & Responsive Pass
 
-**Goal:** a11y ve mobil uyumu sağlamlaştır.
+**Goal:** Harden accessibility and mobile support.
 
 **Files to edit:** `index.html`, `css/style.css`
 
 **Implementation notes:**
 
-- Tüm aksiyon butonlarının `aria-label`'ı olduğundan emin ol; checkbox label'ları completed durumuna göre anlamlı metin versin.
-- `@media (max-width: 480px)`: formu dikey yap, butonu tam genişlik yap, filtreleri ortala, action butonlarını mobilde her zaman görünür kıl.
-- `:focus-visible` ile klavye odağı net olmalı; renk kontrastlarını WCAG AA seviyesinde tut.
+- Make sure all action buttons have an `aria-label`; checkbox labels should provide meaningful text based on the completed state.
+- `@media (max-width: 480px)`: stack the form vertically, make the button full width, center the filters, and keep action buttons always visible on mobile.
+- Keyboard focus must be clear via `:focus-visible`; keep color contrast at WCAG AA level.
 
 **Acceptance checklist:**
 
-- [ ] Uygulama yalnızca klavye ile tam kullanılabiliyor.
-- [ ] 480px altında düzen bozulmuyor.
+- [ ] The app is fully usable with the keyboard alone.
+- [ ] The layout does not break below 480px.
 
 ---
 
 ## STEP 12 — Deployment (Netlify / Static Hosting)
 
-**Goal:** Statik siteyi yayına al.
+**Goal:** Publish the static site.
 
 **Implementation notes:**
 
-- Build adımı gerektirmez; depo kökü doğrudan yayınlanabilir.
-- Netlify: depoyu bağla, build command boş, publish directory kök (`/`).
-- Alternatif olarak lokal önizleme için `python -m http.server 8000` veya `npx serve` kullanılabilir (yalnızca kullanıcı isterse çalıştır).
+- No build step required; the repository root can be deployed directly.
+- Netlify: connect the repository, leave the build command empty, and set the publish directory to the root (`/`).
+- For local preview you may use `python -m http.server 8000` or `npx serve` (run only if the user requests it).
 
 **Acceptance checklist:**
 
-- [ ] Yayınlanan URL'de tüm varlıklar (CSS, JS, fontlar) yükleniyor.
-- [ ] `localStorage` kalıcılığı canlı ortamda çalışıyor.
+- [ ] All assets (CSS, JS, fonts) load on the published URL.
+- [ ] `localStorage` persistence works in the live environment.
 
 ---
 
@@ -360,14 +360,14 @@ const STORAGE_KEY = 'simple-todo-list';
 
 ```javascript
 {
-    id: "unique-id",          // generateId() ile üretilir
-    text: "Task description", // escapeHtml ile render edilir
+    id: "unique-id",          // produced by generateId()
+    text: "Task description", // rendered via escapeHtml
     completed: false,
     createdAt: "ISO date"     // new Date().toISOString()
 }
 ```
 
-**Theme tokens (özet):**
+**Theme tokens (excerpt):**
 
 ```css
 :root {
@@ -385,29 +385,29 @@ const STORAGE_KEY = 'simple-todo-list';
 
 # Appendix B — Reusable Patterns
 
-- **Event delegation:** Dinamik liste öğeleri için tek bir üst dinleyici kullan; `data-action` ile dallan. Her öğeye ayrı dinleyici bağlamaktan kaçın.
-- **Single source of truth:** Tüm durum `state` objesinde; arayüz her zaman `state`'ten türetilir (`render after mutate`).
-- **Pure render helpers:** `createTodoItemHTML` ve `escapeHtml` yan etkisizdir, kolayca test edilebilir.
-- **CSS-driven feedback:** Görsel durumlar (`dragging`, `drag-over-*`, `completed`) JS'te inline stil yerine class toggling ile yönetilir.
+- **Event delegation:** Use a single parent listener for dynamic list items; branch by `data-action`. Avoid binding a separate listener to each item.
+- **Single source of truth:** All state lives in the `state` object; the UI is always derived from `state` (`render after mutate`).
+- **Pure render helpers:** `createTodoItemHTML` and `escapeHtml` are side-effect free and easy to test.
+- **CSS-driven feedback:** Visual states (`dragging`, `drag-over-*`, `completed`) are managed via class toggling instead of inline styles in JS.
 
 ---
 
 # Appendix C — Common Pitfalls
 
-- **DOM indeksini state indeksi sanmak:** Filtre aktifken DOM sırası `state.todos` sırasıyla örtüşmez. Yeniden sıralamada her zaman ID ile çalış.
-- **`substr` kullanımı:** Deprecated. `slice` veya `substring` tercih et.
-- **Escape'i atlamak:** `innerHTML`'e ham kullanıcı metni yazmak XSS açığı yaratır; her zaman `escapeHtml`'den geçir.
-- **Sayaç güncellemesini dağıtmak:** `updateStats` çağrısını tek noktadan (`setFilter`) yönet; çağıran tarafta tekrarlama.
+- **Mistaking the DOM index for the state index:** When a filter is active, the DOM order does not match the `state.todos` order. Always work by ID when reordering.
+- **Using `substr`:** Deprecated. Prefer `slice` or `substring`.
+- **Skipping escaping:** Writing raw user text into `innerHTML` creates an XSS hole; always pass it through `escapeHtml`.
+- **Scattering the counter update:** Manage the `updateStats` call from a single place (`setFilter`); do not repeat it at the call site.
 
 ---
 
 # Appendix D — Pre-flight Checklist
 
-- [ ] Görev ekleme, tamamlama, düzenleme, silme çalışıyor.
-- [ ] Tümü / Aktif / Tamamlanan filtreleri ve sayaç doğru.
-- [ ] Sürükle-bırak tüm filtrelerde doğru öğeyi taşıyor.
-- [ ] Yenileme sonrası veriler korunuyor (`localStorage`).
-- [ ] XSS girdileri metin olarak görüntüleniyor.
-- [ ] Klavye navigasyonu ve odak görünürlüğü çalışıyor.
-- [ ] 480px altında responsive düzen bozulmuyor.
-- [ ] Konsolda hata/uyarı yok.
+- [ ] Adding, completing, editing, and deleting tasks works.
+- [ ] All / Active / Completed filters and the counter are correct.
+- [ ] Drag-and-drop moves the correct item across all filters.
+- [ ] Data persists after refresh (`localStorage`).
+- [ ] XSS inputs are displayed as text.
+- [ ] Keyboard navigation and focus visibility work.
+- [ ] The responsive layout does not break below 480px.
+- [ ] No errors/warnings in the console.

@@ -1,7 +1,7 @@
 /**
  * Simple To-Do List Application
- * CRUD islemleri ve localStorage ile kalici veri saklama
- * 
+ * CRUD operations with persistent storage via localStorage
+ *
  * @author GitHub Bootcamp
  * @version 1.0.0
  */
@@ -11,7 +11,7 @@
 // ========================================
 
 /**
- * Uygulama durumu
+ * Application state
  * @type {Object}
  */
 const state = {
@@ -42,28 +42,28 @@ const elements = {
 // ========================================
 
 /**
- * Verileri localStorage'dan yukler
- * @returns {Array} Todo listesi
+ * Loads data from localStorage
+ * @returns {Array} Todo list
  */
 const loadFromStorage = () => {
     try {
         const data = localStorage.getItem(STORAGE_KEY);
         return data ? JSON.parse(data) : [];
     } catch (error) {
-        console.error('LocalStorage okuma hatasi:', error);
+        console.error('LocalStorage read error:', error);
         return [];
     }
 };
 
 /**
- * Verileri localStorage'a kaydeder
- * @param {Array} todos - Todo listesi
+ * Saves data to localStorage
+ * @param {Array} todos - Todo list
  */
 const saveToStorage = (todos) => {
     try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(todos));
     } catch (error) {
-        console.error('LocalStorage yazma hatasi:', error);
+        console.error('LocalStorage write error:', error);
     }
 };
 
@@ -72,16 +72,16 @@ const saveToStorage = (todos) => {
 // ========================================
 
 /**
- * Benzersiz ID olusturur
- * @returns {string} Benzersiz ID
+ * Generates a unique ID
+ * @returns {string} Unique ID
  */
 const generateId = () => {
     return Date.now().toString(36) + Math.random().toString(36).slice(2);
 };
 
 /**
- * Yeni todo ekler
- * @param {string} text - Todo metni
+ * Adds a new todo
+ * @param {string} text - Todo text
  */
 const addTodo = (text) => {
     const trimmedText = text.trim();
@@ -101,15 +101,15 @@ const addTodo = (text) => {
 };
 
 /**
- * Todo siler
- * @param {string} id - Silinecek todo ID'si
+ * Deletes a todo
+ * @param {string} id - ID of the todo to delete
  */
 const deleteTodo = (id) => {
     const todoElement = document.querySelector(`[data-id="${id}"]`);
-    
+
     if (todoElement) {
         todoElement.style.animation = 'slideOut 0.3s ease forwards';
-        
+
         setTimeout(() => {
             state.todos = state.todos.filter(todo => todo.id !== id);
             saveToStorage(state.todos);
@@ -120,8 +120,8 @@ const deleteTodo = (id) => {
 };
 
 /**
- * Todo tamamlama durumunu degistirir
- * @param {string} id - Todo ID'si
+ * Toggles a todo's completed state
+ * @param {string} id - Todo ID
  */
 const toggleTodo = (id) => {
     const todo = state.todos.find(t => t.id === id);
@@ -134,14 +134,14 @@ const toggleTodo = (id) => {
 };
 
 /**
- * Todo duzenleme moduna gecer
- * @param {string} id - Todo ID'si
+ * Enters edit mode for a todo
+ * @param {string} id - Todo ID
  */
 const startEditTodo = (id) => {
     state.editingId = id;
     renderTodos();
-    
-    // Input'a focus ver
+
+    // Focus the edit input
     const editInput = document.querySelector('.todo-edit-input');
     if (editInput) {
         editInput.focus();
@@ -150,9 +150,9 @@ const startEditTodo = (id) => {
 };
 
 /**
- * Todo duzenlemeyi kaydeder
- * @param {string} id - Todo ID'si
- * @param {string} newText - Yeni metin
+ * Saves a todo edit
+ * @param {string} id - Todo ID
+ * @param {string} newText - New text
  */
 const saveEditTodo = (id, newText) => {
     const trimmedText = newText.trim();
@@ -166,13 +166,13 @@ const saveEditTodo = (id, newText) => {
         todo.text = trimmedText;
         saveToStorage(state.todos);
     }
-    
+
     state.editingId = null;
     renderTodos();
 };
 
 /**
- * Todo duzenlemeyi iptal eder
+ * Cancels a todo edit
  */
 const cancelEditTodo = () => {
     state.editingId = null;
@@ -180,11 +180,11 @@ const cancelEditTodo = () => {
 };
 
 /**
- * Tamamlanan todolari siler
+ * Removes all completed todos
  */
 const clearCompleted = () => {
     const completedItems = document.querySelectorAll('.todo-item.completed');
-    
+
     completedItems.forEach((item, index) => {
         setTimeout(() => {
             item.style.animation = 'slideOut 0.3s ease forwards';
@@ -204,25 +204,25 @@ const clearCompleted = () => {
 // ========================================
 
 /**
- * Filtreyi degistirir
- * @param {string} filter - Filtre tipi (all, active, completed)
+ * Changes the active filter
+ * @param {string} filter - Filter type (all, active, completed)
  */
 const setFilter = (filter) => {
     state.currentFilter = filter;
-    
+
     elements.filterButtons.forEach(btn => {
         const isActive = btn.dataset.filter === filter;
         btn.classList.toggle('active', isActive);
         btn.setAttribute('aria-selected', isActive);
     });
-    
+
     renderTodos();
     updateStats();
 };
 
 /**
- * Filtrelenmis todolari getirir
- * @returns {Array} Filtrelenmis todo listesi
+ * Returns the filtered todos
+ * @returns {Array} Filtered todo list
  */
 const getFilteredTodos = () => {
     switch (state.currentFilter) {
@@ -239,12 +239,12 @@ const getFilteredTodos = () => {
 // Drag and Drop Functions
 // ========================================
 
-// Suruklenen todo'nun ID'si (DOM indeksi yerine ID kullaniyoruz; boylece
-// filtre aktifken de dogru ogeyi tasiriz)
+// ID of the dragged todo (we use the ID instead of the DOM index so that
+// the correct item is moved even when a filter is active)
 let draggedId = null;
 
 /**
- * Suruklenen ogedeki gorsel geri bildirimi temizler
+ * Clears the visual feedback on the dragged-over item
  */
 const clearDragIndicators = () => {
     elements.todoList.querySelectorAll('.drag-over-top, .drag-over-bottom').forEach(item => {
@@ -253,7 +253,7 @@ const clearDragIndicators = () => {
 };
 
 /**
- * Drag basladiginda
+ * Fired when dragging starts
  * @param {DragEvent} event
  */
 const handleDragStart = (event) => {
@@ -267,7 +267,7 @@ const handleDragStart = (event) => {
 };
 
 /**
- * Drag sirasinda element uzerinde
+ * Fired while dragging over an element
  * @param {DragEvent} event
  */
 const handleDragOver = (event) => {
@@ -285,7 +285,7 @@ const handleDragOver = (event) => {
 };
 
 /**
- * Drag element disina ciktiginda
+ * Fired when leaving an element during drag
  * @param {DragEvent} event
  */
 const handleDragLeave = (event) => {
@@ -296,7 +296,7 @@ const handleDragLeave = (event) => {
 };
 
 /**
- * Drop yapildiginda - state.todos'u ID'ler uzerinden yeniden siralar
+ * Fired on drop - reorders state.todos using IDs
  * @param {DragEvent} event
  */
 const handleDrop = (event) => {
@@ -329,7 +329,7 @@ const handleDrop = (event) => {
 };
 
 /**
- * Drag bittiginde tum gorsel durumlari temizler
+ * Fired when dragging ends - clears all visual states
  */
 const handleDragEnd = () => {
     const draggedItem = elements.todoList.querySelector('.dragging');
@@ -345,13 +345,13 @@ const handleDragEnd = () => {
 // ========================================
 
 /**
- * Todo item HTML'i olusturur
- * @param {Object} todo - Todo objesi
+ * Builds the HTML for a todo item
+ * @param {Object} todo - Todo object
  * @returns {string} HTML string
  */
 const createTodoItemHTML = (todo) => {
     const isEditing = state.editingId === todo.id;
-    
+
     if (isEditing) {
         return `
             <li class="todo-item ${todo.completed ? 'completed' : ''}" data-id="${todo.id}">
@@ -359,15 +359,15 @@ const createTodoItemHTML = (todo) => {
                     type="text" 
                     class="todo-edit-input" 
                     value="${escapeHtml(todo.text)}"
-                    aria-label="Görevi düzenle"
+                    aria-label="Edit task"
                 >
                 <div class="todo-actions" style="opacity: 1;">
-                    <button class="todo-action-btn save" data-action="save" aria-label="Kaydet">
+                    <button class="todo-action-btn save" data-action="save" aria-label="Save">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <polyline points="20 6 9 17 4 12"></polyline>
                         </svg>
                     </button>
-                    <button class="todo-action-btn cancel" data-action="cancel" aria-label="İptal">
+                    <button class="todo-action-btn cancel" data-action="cancel" aria-label="Cancel">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <line x1="18" y1="6" x2="6" y2="18"></line>
                             <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -377,12 +377,12 @@ const createTodoItemHTML = (todo) => {
             </li>
         `;
     }
-    
+
     return `
         <li class="todo-item ${todo.completed ? 'completed' : ''}" 
             data-id="${todo.id}" 
             draggable="true"
-            aria-label="${escapeHtml(todo.text)}, ${todo.completed ? 'tamamlandı' : 'aktif'}">
+            aria-label="${escapeHtml(todo.text)}, ${todo.completed ? 'completed' : 'active'}">
             <div class="drag-handle" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <circle cx="9" cy="5" r="1"></circle>
@@ -398,7 +398,7 @@ const createTodoItemHTML = (todo) => {
                     type="checkbox" 
                     ${todo.completed ? 'checked' : ''} 
                     data-action="toggle"
-                    aria-label="${todo.completed ? 'Tamamlanmadı olarak işaretle' : 'Tamamlandı olarak işaretle'}"
+                    aria-label="${todo.completed ? 'Mark as not completed' : 'Mark as completed'}"
                 >
                 <span class="checkmark">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
@@ -408,13 +408,13 @@ const createTodoItemHTML = (todo) => {
             </label>
             <span class="todo-text">${escapeHtml(todo.text)}</span>
             <div class="todo-actions">
-                <button class="todo-action-btn edit" data-action="edit" aria-label="Düzenle">
+                <button class="todo-action-btn edit" data-action="edit" aria-label="Edit">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"></path>
                         <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                     </svg>
                 </button>
-                <button class="todo-action-btn delete" data-action="delete" aria-label="Sil">
+                <button class="todo-action-btn delete" data-action="delete" aria-label="Delete">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <polyline points="3 6 5 6 21 6"></polyline>
                         <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"></path>
@@ -428,9 +428,9 @@ const createTodoItemHTML = (todo) => {
 };
 
 /**
- * HTML karakterlerini escape eder (XSS koruması)
- * @param {string} text - Escape edilecek metin
- * @returns {string} Escape edilmis metin
+ * Escapes HTML characters (XSS protection)
+ * @param {string} text - Text to escape
+ * @returns {string} Escaped text
  */
 const escapeHtml = (text) => {
     const div = document.createElement('div');
@@ -439,19 +439,19 @@ const escapeHtml = (text) => {
 };
 
 /**
- * Todo listesini render eder
+ * Renders the todo list
  */
 const renderTodos = () => {
     const filteredTodos = getFilteredTodos();
-    
+
     if (filteredTodos.length === 0) {
         elements.todoList.innerHTML = '';
         elements.emptyState.classList.add('show');
     } else {
         elements.emptyState.classList.remove('show');
         elements.todoList.innerHTML = filteredTodos.map(createTodoItemHTML).join('');
-        
-        // Drag and drop event listener'larini ekle
+
+        // Attach drag and drop event listeners
         elements.todoList.querySelectorAll('.todo-item').forEach(item => {
             item.addEventListener('dragstart', handleDragStart);
             item.addEventListener('dragend', handleDragEnd);
@@ -460,28 +460,28 @@ const renderTodos = () => {
 };
 
 /**
- * Istatistikleri gunceller
+ * Updates the statistics
  */
 const updateStats = () => {
     const total = state.todos.length;
     const active = state.todos.filter(t => !t.completed).length;
     const completed = state.todos.filter(t => t.completed).length;
-    
-    // Gorev sayisini guncelle
+
+    // Update the task count
     let countText = '';
     switch (state.currentFilter) {
         case 'active':
-            countText = `${active} aktif görev`;
+            countText = `${active} active`;
             break;
         case 'completed':
-            countText = `${completed} tamamlanan`;
+            countText = `${completed} completed`;
             break;
         default:
-            countText = `${total} görev`;
+            countText = `${total} ${total === 1 ? 'task' : 'tasks'}`;
     }
     elements.todoCount.textContent = countText;
-    
-    // "Tamamlananlari Temizle" butonunu goster/gizle
+
+    // Show/hide the "Clear Completed" button
     if (completed > 0) {
         elements.clearCompleted.classList.add('show');
     } else {
@@ -513,10 +513,10 @@ const handleTodoListClick = (event) => {
     const target = event.target;
     const todoItem = target.closest('.todo-item');
     if (!todoItem) return;
-    
+
     const todoId = todoItem.dataset.id;
     const action = target.closest('[data-action]')?.dataset.action;
-    
+
     switch (action) {
         case 'toggle':
             toggleTodo(todoId);
@@ -547,7 +547,7 @@ const handleEditKeydown = (event) => {
     if (event.target.classList.contains('todo-edit-input')) {
         const todoItem = event.target.closest('.todo-item');
         const todoId = todoItem?.dataset.id;
-        
+
         if (event.key === 'Enter') {
             event.preventDefault();
             saveEditTodo(todoId, event.target.value);
@@ -574,17 +574,17 @@ const handleFilterClick = (event) => {
 // ========================================
 
 /**
- * Uygulamayi baslatir
+ * Initializes the application
  */
 const init = () => {
-    // LocalStorage'dan verileri yukle
+    // Load data from localStorage
     state.todos = loadFromStorage();
-    
-    // Ilk render
+
+    // Initial render
     renderTodos();
     updateStats();
-    
-    // Event listener'lari ekle
+
+    // Attach event listeners
     elements.todoForm.addEventListener('submit', handleFormSubmit);
     elements.todoList.addEventListener('click', handleTodoListClick);
     elements.todoList.addEventListener('keydown', handleEditKeydown);
@@ -592,15 +592,15 @@ const init = () => {
     elements.todoList.addEventListener('dragleave', handleDragLeave);
     elements.todoList.addEventListener('drop', handleDrop);
     elements.clearCompleted.addEventListener('click', clearCompleted);
-    
-    // Filtre butonlari
+
+    // Filter buttons
     elements.filterButtons.forEach(btn => {
         btn.addEventListener('click', handleFilterClick);
     });
-    
-    // Input'a focus
+
+    // Focus the input
     elements.todoInput.focus();
 };
 
-// DOM hazir oldugunda baslat
+// Initialize when the DOM is ready
 document.addEventListener('DOMContentLoaded', init);

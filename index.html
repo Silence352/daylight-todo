@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="tr">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Simple To-Do List - Görevlerinizi kolayca yönetin">
+    <meta name="description" content="Simple To-Do List - Manage your tasks with ease">
     <title>Simple To-Do List</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -14,8 +14,8 @@
     <div class="app-container">
         <!-- Header Section -->
         <header class="app-header">
-            <h1 class="app-title">Yapılacaklar</h1>
-            <p class="app-subtitle">Görevlerini organize et, verimli ol.</p>
+            <h1 class="app-title">To-Do</h1>
+            <p class="app-subtitle">Organize your tasks, stay productive.</p>
         </header>
 
         <!-- Add Todo Section -->
@@ -25,31 +25,31 @@
                     type="text" 
                     id="todoInput" 
                     class="todo-input" 
-                    placeholder="Yeni görev ekle..."
+                    placeholder="Add a new task..."
                     autocomplete="off"
                     maxlength="150"
-                    aria-label="Yeni görev ekle"
+                    aria-label="Add a new task"
                 >
-                <button type="submit" class="btn btn-add" aria-label="Görev ekle">
+                <button type="submit" class="btn btn-add" aria-label="Add task">
                     <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <line x1="12" y1="5" x2="12" y2="19"></line>
                         <line x1="5" y1="12" x2="19" y2="12"></line>
                     </svg>
-                    <span>Ekle</span>
+                    <span>Add</span>
                 </button>
             </form>
         </section>
 
         <!-- Filters Section -->
         <section class="filters-section">
-            <div class="filter-buttons" role="tablist" aria-label="Görev filtreleri">
+            <div class="filter-buttons" role="tablist" aria-label="Task filters">
                 <button 
                     class="filter-btn active" 
                     data-filter="all" 
                     role="tab" 
                     aria-selected="true"
                 >
-                    Tümü
+                    All
                 </button>
                 <button 
                     class="filter-btn" 
@@ -57,7 +57,7 @@
                     role="tab" 
                     aria-selected="false"
                 >
-                    Aktif
+                    Active
                 </button>
                 <button 
                     class="filter-btn" 
@@ -65,17 +65,17 @@
                     role="tab" 
                     aria-selected="false"
                 >
-                    Tamamlanan
+                    Completed
                 </button>
             </div>
             <div class="todo-stats">
-                <span id="todoCount" class="todo-count">0 görev</span>
+                <span id="todoCount" class="todo-count">0 tasks</span>
             </div>
         </section>
 
         <!-- Todo List Section -->
         <section class="todo-list-section">
-            <ul id="todoList" class="todo-list" aria-label="Görev listesi">
+            <ul id="todoList" class="todo-list" aria-label="Task list">
                 <!-- Todo items will be rendered here -->
             </ul>
             <div id="emptyState" class="empty-state">
@@ -85,15 +85,15 @@
                         <path d="M9 14l2 2 4-4"></path>
                     </svg>
                 </div>
-                <p class="empty-text">Henüz görev eklenmedi</p>
-                <p class="empty-hint">Yukarıdaki alana yazarak ilk görevini ekle</p>
+                <p class="empty-text">No tasks yet</p>
+                <p class="empty-hint">Type in the field above to add your first task</p>
             </div>
         </section>
 
         <!-- Footer Section -->
         <footer class="app-footer">
-            <button id="clearCompleted" class="btn btn-clear" aria-label="Tamamlananları temizle">
-                Tamamlananları Temizle
+            <button id="clearCompleted" class="btn btn-clear" aria-label="Clear completed tasks">
+                Clear Completed
             </button>
         </footer>
     </div>

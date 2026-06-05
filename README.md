@@ -73,13 +73,13 @@ Simply double-click `index.html` or drag it into your browser.
 
 ## Usage
 
-1. **Add a Task**: Type your task in the input field and click "Ekle" button or press Enter
+1. **Add a Task**: Type your task in the input field and click the "Add" button or press Enter
 2. **Complete a Task**: Click the circular checkbox on the left side of any task
 3. **Edit a Task**: Hover over a task and click the edit (pencil) icon, then modify the text
 4. **Delete a Task**: Hover over a task and click the delete (trash) icon
-5. **Filter Tasks**: Use the filter buttons (Tumu/Aktif/Tamamlanan) to view specific tasks
+5. **Filter Tasks**: Use the filter buttons (All/Active/Completed) to view specific tasks
 6. **Reorder Tasks**: Drag and drop tasks to change their order
-7. **Clear Completed**: Click "Tamamlananlari Temizle" to remove all completed tasks
+7. **Clear Completed**: Click "Clear Completed" to remove all completed tasks
 
 ## How It Works?
 
