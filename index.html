@@ -1,21 +1,25 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Simple To-Do List - Manage your tasks with ease">
-    <title>Simple To-Do List</title>
+    <meta name="description" content="待办 · 晨光 —— 简洁明亮的任务清单，规划你的每一天">
+    <title>待办 · 晨光</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
     <div class="app-container">
         <!-- Header Section -->
         <header class="app-header">
-            <h1 class="app-title">To-Do</h1>
-            <p class="app-subtitle">Organize your tasks, stay productive.</p>
+            <div class="lang-switch" role="group" data-i18n-aria="aria.langSwitch">
+                <button type="button" class="lang-btn active" data-lang="zh" aria-pressed="true" aria-label="切换到中文">中</button>
+                <button type="button" class="lang-btn" data-lang="en" aria-pressed="false" aria-label="Switch to English">EN</button>
+            </div>
+            <h1 class="app-title" data-i18n="app.title">待办</h1>
+            <p class="app-subtitle" data-i18n="app.subtitle">规划你的任务，从容开启每一天。</p>
         </header>
 
         <!-- Add Todo Section -->
@@ -25,57 +29,62 @@
                     type="text" 
                     id="todoInput" 
                     class="todo-input" 
-                    placeholder="Add a new task..."
+                    placeholder="添加新任务…"
                     autocomplete="off"
                     maxlength="150"
-                    aria-label="Add a new task"
+                    aria-label="添加新任务"
+                    data-i18n-placeholder="placeholder.addTask"
+                    data-i18n-aria="aria.addInput"
                 >
-                <button type="submit" class="btn btn-add" aria-label="Add task">
+                <button type="submit" class="btn btn-add" aria-label="添加任务" data-i18n-aria="aria.add">
                     <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <line x1="12" y1="5" x2="12" y2="19"></line>
                         <line x1="5" y1="12" x2="19" y2="12"></line>
                     </svg>
-                    <span>Add</span>
+                    <span data-i18n="btn.add">添加</span>
                 </button>
             </form>
         </section>
 
         <!-- Filters Section -->
         <section class="filters-section">
-            <div class="filter-buttons" role="tablist" aria-label="Task filters">
+            <div class="filter-buttons" role="tablist" aria-label="任务筛选" data-i18n-aria="aria.filters">
                 <button 
                     class="filter-btn active" 
                     data-filter="all" 
                     role="tab" 
                     aria-selected="true"
+                    data-i18n="filter.all"
                 >
-                    All
+                    全部
                 </button>
                 <button 
                     class="filter-btn" 
                     data-filter="active" 
                     role="tab" 
                     aria-selected="false"
+                    data-i18n="filter.active"
                 >
-                    Active
+                    进行中
                 </button>
                 <button 
                     class="filter-btn" 
                     data-filter="completed" 
                     role="tab" 
                     aria-selected="false"
+                    data-i18n="filter.completed"
                 >
-                    Completed
+                    已完成
                 </button>
             </div>
             <div class="todo-stats">
-                <span id="todoCount" class="todo-count">0 tasks</span>
+                <span id="todoCount" class="todo-count">0 项任务</span>
             </div>
         </section>
 
         <!-- Todo List Section -->
         <section class="todo-list-section">
-            <ul id="todoList" class="todo-list" aria-label="Task list">
+            <ul id="todoList" class="todo-list" aria-label="任务列表" data-i18n-aria="aria.todoList">
                 <!-- Todo items will be rendered here -->
             </ul>
             <div id="emptyState" class="empty-state">
@@ -85,19 +94,20 @@
                         <path d="M9 14l2 2 4-4"></path>
                     </svg>
                 </div>
-                <p class="empty-text">No tasks yet</p>
-                <p class="empty-hint">Type in the field above to add your first task</p>
+                <p class="empty-text" data-i18n="empty.text">还没有任务</p>
+                <p class="empty-hint" data-i18n="empty.hint">在上方输入框写下你的第一个任务吧</p>
             </div>
         </section>
 
         <!-- Footer Section -->
         <footer class="app-footer">
-            <button id="clearCompleted" class="btn btn-clear" aria-label="Clear completed tasks">
-                Clear Completed
+            <button id="clearCompleted" class="btn btn-clear" aria-label="清除已完成任务" data-i18n="btn.clearCompleted" data-i18n-aria="aria.clearCompleted">
+                清除已完成
             </button>
         </footer>
     </div>
 
+    <script src="js/i18n.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>

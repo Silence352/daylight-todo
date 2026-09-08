@@ -359,15 +359,15 @@ const createTodoItemHTML = (todo) => {
                     type="text" 
                     class="todo-edit-input" 
                     value="${escapeHtml(todo.text)}"
-                    aria-label="Edit task"
+                    aria-label="${t('aria.editTask')}"
                 >
                 <div class="todo-actions" style="opacity: 1;">
-                    <button class="todo-action-btn save" data-action="save" aria-label="Save">
+                    <button class="todo-action-btn save" data-action="save" aria-label="${t('aria.save')}">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <polyline points="20 6 9 17 4 12"></polyline>
                         </svg>
                     </button>
-                    <button class="todo-action-btn cancel" data-action="cancel" aria-label="Cancel">
+                    <button class="todo-action-btn cancel" data-action="cancel" aria-label="${t('aria.cancel')}">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <line x1="18" y1="6" x2="6" y2="18"></line>
                             <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -382,7 +382,7 @@ const createTodoItemHTML = (todo) => {
         <li class="todo-item ${todo.completed ? 'completed' : ''}" 
             data-id="${todo.id}" 
             draggable="true"
-            aria-label="${escapeHtml(todo.text)}, ${todo.completed ? 'completed' : 'active'}">
+            aria-label="${escapeHtml(todo.text)}, ${todo.completed ? t('aria.itemCompleted') : t('aria.itemActive')}">
             <div class="drag-handle" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <circle cx="9" cy="5" r="1"></circle>
@@ -398,7 +398,7 @@ const createTodoItemHTML = (todo) => {
                     type="checkbox" 
                     ${todo.completed ? 'checked' : ''} 
                     data-action="toggle"
-                    aria-label="${todo.completed ? 'Mark as not completed' : 'Mark as completed'}"
+                    aria-label="${todo.completed ? t('aria.markNotCompleted') : t('aria.markCompleted')}"
                 >
                 <span class="checkmark">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
@@ -408,13 +408,13 @@ const createTodoItemHTML = (todo) => {
             </label>
             <span class="todo-text">${escapeHtml(todo.text)}</span>
             <div class="todo-actions">
-                <button class="todo-action-btn edit" data-action="edit" aria-label="Edit">
+                <button class="todo-action-btn edit" data-action="edit" aria-label="${t('aria.edit')}">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"></path>
                         <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                     </svg>
                 </button>
-                <button class="todo-action-btn delete" data-action="delete" aria-label="Delete">
+                <button class="todo-action-btn delete" data-action="delete" aria-label="${t('aria.delete')}">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <polyline points="3 6 5 6 21 6"></polyline>
                         <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"></path>
@@ -471,13 +471,13 @@ const updateStats = () => {
     let countText = '';
     switch (state.currentFilter) {
         case 'active':
-            countText = `${active} active`;
+            countText = t('stats.active', { n: active });
             break;
         case 'completed':
-            countText = `${completed} completed`;
+            countText = t('stats.completed', { n: completed });
             break;
         default:
-            countText = `${total} ${total === 1 ? 'task' : 'tasks'}`;
+            countText = t(total === 1 ? 'stats.taskOne' : 'stats.tasks', { n: total });
     }
     elements.todoCount.textContent = countText;
 
@@ -577,12 +577,21 @@ const handleFilterClick = (event) => {
  * Initializes the application
  */
 const init = () => {
+    // Initialize i18n (restores saved language, applies static translations)
+    initI18n();
+
     // Load data from localStorage
     state.todos = loadFromStorage();
 
     // Initial render
     renderTodos();
     updateStats();
+
+    // Re-render dynamic texts when the language changes
+    document.addEventListener('languagechange', () => {
+        renderTodos();
+        updateStats();
+    });
 
     // Attach event listeners
     elements.todoForm.addEventListener('submit', handleFormSubmit);
