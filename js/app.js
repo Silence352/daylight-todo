@@ -23,7 +23,11 @@ const state = {
     // v4 Smart Extraction
     extractionDrafts: [],
     extractionLoading: false,
-    extractionError: null
+    extractionError: null,
+    // v5 Account & Cloud Workspace
+    auth: { user: null, loading: false },
+    cloudTasks: [],
+    authModalTab: 'login'
 };
 
 // Local Storage key & schema version
@@ -75,7 +79,17 @@ const elements = {
     doneLeftSummary: document.getElementById('doneLeftSummary'),
     insightDoneToday: document.getElementById('insightDoneToday'),
     insightOverdue: document.getElementById('insightOverdue'),
-    insightHighOpen: document.getElementById('insightHighOpen')
+    insightHighOpen: document.getElementById('insightHighOpen'),
+    // v5 Account & Cloud Workspace
+    authBtn: document.getElementById('authBtn'),
+    authLogoutBtn: document.getElementById('authLogoutBtn'),
+    authModal: document.getElementById('authModal'),
+    authError: document.getElementById('authError'),
+    authLoginForm: document.getElementById('authLoginForm'),
+    authRegisterForm: document.getElementById('authRegisterForm'),
+    authTabs: document.querySelectorAll('.auth-tab'),
+    cloudWorkspaceSection: document.getElementById('cloudWorkspaceSection'),
+    cloudTaskList: document.getElementById('cloudTaskList')
 };
 
 // ========================================
@@ -2286,6 +2300,473 @@ const addSelectedDrafts = () => {
 };
 
 // ========================================
+// Account & Cloud Workspace (v5)
+// 注册/登录/退出 + 云端任务展示
+// 本地优先：未登录时 v4 行为完全不变；登录后云任务额外展示，不自动上传本地任务
+// ========================================
+
+/** 密码最小长度（与服务端保持一致） */
+const AUTH_PASSWORD_MIN = 8;
+/** 简单邮箱正则（与服务端粗校验对齐，最终以服务端为准） */
+const AUTH_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * 把服务端错误码映射成 i18n key
+ * @param {string} code - 服务端返回的 error 字段
+ * @returns {string} i18n key
+ */
+const authErrorKey = (code) => {
+    switch (code) {
+        case 'EMAIL_EXISTS': return 'account.errorEmailExists';
+        case 'INVALID_CREDENTIALS': return 'account.errorInvalidCredentials';
+        case 'INVALID_EMAIL': return 'account.errorEmailFormat';
+        case 'PASSWORD_TOO_SHORT': return 'account.errorPasswordLength';
+        case 'PASSWORD_MISMATCH': return 'account.errorPasswordMatch';
+        default: return 'account.errorNetwork';
+    }
+};
+
+/**
+ * 在模态里显示一条错误文案（双语由 t() 处理）
+ * @param {string} message - 已翻译的文案
+ */
+const showAuthError = (message) => {
+    if (elements.authError) {
+        elements.authError.textContent = message;
+    }
+};
+
+/** 清空模态错误文案 */
+const clearAuthError = () => {
+    if (elements.authError) {
+        elements.authError.textContent = '';
+    }
+};
+
+/**
+ * 切换模态 tab（登录 / 注册），同步表单与 aria
+ * @param {string} tab - 'login' | 'register'
+ */
+const switchAuthTab = (tab) => {
+    if (tab !== 'login' && tab !== 'register') return;
+    state.authModalTab = tab;
+    clearAuthError();
+
+    elements.authTabs.forEach(btn => {
+        const isActive = btn.dataset.authTab === tab;
+        btn.classList.toggle('active', isActive);
+        btn.setAttribute('aria-selected', isActive);
+    });
+
+    const isLogin = tab === 'login';
+    elements.authLoginForm.classList.toggle('hidden', !isLogin);
+    elements.authRegisterForm.classList.toggle('hidden', isLogin);
+
+    // 把焦点放到刚显示的表单第一个输入框，方便键盘用户
+    const firstInput = isLogin
+        ? elements.authLoginForm.querySelector('input')
+        : elements.authRegisterForm.querySelector('input');
+    if (firstInput) firstInput.focus();
+};
+
+/**
+ * 打开账号模态
+ * @param {string} [tab='login'] - 初始 tab
+ */
+const openAuthModal = (tab = 'login') => {
+    elements.authModal.classList.remove('hidden');
+    switchAuthTab(tab);
+};
+
+/** 关闭账号模态并清空表单 */
+const closeAuthModal = () => {
+    elements.authModal.classList.add('hidden');
+    elements.authLoginForm.reset();
+    elements.authRegisterForm.reset();
+    clearAuthError();
+};
+
+/**
+ * 客户端基本校验，返回第一个错误的 i18n key，否则 null
+ * @param {string} mode - 'login' | 'register'
+ * @param {Object} fields - { email, password, confirmPassword? }
+ * @returns {string|null}
+ */
+const validateAuthFields = (mode, fields) => {
+    if (!AUTH_EMAIL_RE.test(fields.email)) {
+        return 'account.errorEmailFormat';
+    }
+    if (fields.password.length < AUTH_PASSWORD_MIN) {
+        return 'account.errorPasswordLength';
+    }
+    if (mode === 'register' && fields.password !== fields.confirmPassword) {
+        return 'account.errorPasswordMatch';
+    }
+    return null;
+};
+
+/**
+ * 处理登录/注册表单提交
+ * 成功 → 设登录态 + 拉云任务 + 关模态 + toast
+ * 失败 → 显示错误（双语）
+ * @param {Event} event
+ */
+const handleAuthSubmit = async (event) => {
+    event.preventDefault();
+    const form = event.target;
+    const mode = form.dataset.authMode;
+    if (mode !== 'login' && mode !== 'register') return;
+    if (state.auth.loading) return;
+
+    const email = form.elements.email.value.trim();
+    const password = form.elements.password.value;
+    const confirmPassword = mode === 'register'
+        ? form.elements.confirmPassword.value
+        : undefined;
+
+    const errorKey = validateAuthFields(mode, { email, password, confirmPassword });
+    if (errorKey) {
+        showAuthError(t(errorKey));
+        return;
+    }
+
+    clearAuthError();
+    state.auth.loading = true;
+    const submitBtn = form.querySelector('.auth-submit');
+    if (submitBtn) submitBtn.disabled = true;
+
+    try {
+        const response = await fetch(`/api/auth/${mode}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept-Language': currentLang === 'en' ? 'en' : 'zh'
+            },
+            body: JSON.stringify({ email, password })
+        });
+
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok || !data || !data.user) {
+            const code = data && data.error ? data.error : 'NETWORK';
+            showAuthError(t(authErrorKey(code)));
+            return;
+        }
+
+        state.auth.user = data.user;
+        updateAuthUI();
+        closeAuthModal();
+        showToast(t(mode === 'login' ? 'account.loginSuccess' : 'account.registerSuccess'));
+        await fetchCloudTasks();
+    } catch (error) {
+        console.error('Auth request failed:', error);
+        showAuthError(t('account.errorNetwork'));
+    } finally {
+        state.auth.loading = false;
+        if (submitBtn) submitBtn.disabled = false;
+    }
+};
+
+/**
+ * 退出登录：POST /api/auth/logout → 清登录态 + 清云任务 + 更新页头
+ */
+const handleLogout = async () => {
+    try {
+        await fetch('/api/auth/logout', {
+            method: 'POST',
+            headers: { 'Accept-Language': currentLang === 'en' ? 'en' : 'zh' }
+        });
+    } catch (error) {
+        // 即使请求失败也清本地态，避免卡在登录态
+        console.error('Logout request failed:', error);
+    }
+    state.auth.user = null;
+    state.cloudTasks = [];
+    updateAuthUI();
+    renderCloudWorkspace();
+    showToast(t('account.logoutSuccess'));
+};
+
+/**
+ * 拉取云端任务：GET /api/cloud/tasks → state.cloudTasks → renderCloudWorkspace
+ * 未登录时不调用
+ */
+const fetchCloudTasks = async () => {
+    if (!state.auth.user) return;
+    try {
+        const response = await fetch('/api/cloud/tasks', {
+            headers: { 'Accept-Language': currentLang === 'en' ? 'en' : 'zh' }
+        });
+        if (!response.ok) {
+            // 401 → 会话失效，清登录态
+            if (response.status === 401) {
+                state.auth.user = null;
+                state.cloudTasks = [];
+                updateAuthUI();
+                renderCloudWorkspace();
+            }
+            return;
+        }
+        const data = await response.json().catch(() => ({ tasks: [] }));
+        state.cloudTasks = Array.isArray(data.tasks) ? data.tasks : [];
+        renderCloudWorkspace();
+    } catch (error) {
+        console.error('Fetch cloud tasks failed:', error);
+    }
+};
+
+/**
+ * 切换云端任务完成状态：PUT /api/cloud/tasks/:id
+ * @param {string} taskId
+ */
+const toggleCloudTask = async (taskId) => {
+    const task = state.cloudTasks.find(t => t.id === taskId);
+    if (!task) return;
+    const nextCompleted = !task.completed;
+
+    // 乐观更新
+    task.completed = nextCompleted;
+    task.completedAt = nextCompleted ? new Date().toISOString() : null;
+    renderCloudWorkspace();
+
+    try {
+        const response = await fetch(`/api/cloud/tasks/${encodeURIComponent(taskId)}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept-Language': currentLang === 'en' ? 'en' : 'zh'
+            },
+            body: JSON.stringify({ completed: nextCompleted })
+        });
+        if (!response.ok) {
+            // 回滚
+            task.completed = !nextCompleted;
+            task.completedAt = nextCompleted ? null : new Date().toISOString();
+            renderCloudWorkspace();
+            return;
+        }
+        const data = await response.json().catch(() => null);
+        if (data && data.task) {
+            // 用服务端返回的最新值替换
+            const idx = state.cloudTasks.findIndex(t => t.id === taskId);
+            if (idx !== -1) state.cloudTasks[idx] = data.task;
+            renderCloudWorkspace();
+        }
+    } catch (error) {
+        console.error('Toggle cloud task failed:', error);
+        task.completed = !nextCompleted;
+        task.completedAt = nextCompleted ? null : new Date().toISOString();
+        renderCloudWorkspace();
+    }
+};
+
+/**
+ * 删除云端任务：DELETE /api/cloud/tasks/:id
+ * @param {string} taskId
+ */
+const deleteCloudTask = async (taskId) => {
+    const task = state.cloudTasks.find(t => t.id === taskId);
+    if (!task) return;
+
+    // 乐观移除
+    state.cloudTasks = state.cloudTasks.filter(t => t.id !== taskId);
+    renderCloudWorkspace();
+
+    try {
+        const response = await fetch(`/api/cloud/tasks/${encodeURIComponent(taskId)}`, {
+            method: 'DELETE',
+            headers: { 'Accept-Language': currentLang === 'en' ? 'en' : 'zh' }
+        });
+        if (!response.ok && response.status !== 404) {
+            // 失败（非 404）→ 回滚
+            state.cloudTasks.push(task);
+            renderCloudWorkspace();
+        }
+    } catch (error) {
+        console.error('Delete cloud task failed:', error);
+        state.cloudTasks.push(task);
+        renderCloudWorkspace();
+    }
+};
+
+/**
+ * 构造单条云端任务 HTML（用户字符串经 escapeHtml/escapeAttr）
+ * @param {Object} task - 云任务
+ * @returns {string}
+ */
+const createCloudTaskHTML = (task) => {
+    const priority = task.priority || 'medium';
+    const priorityLabel = t(`priority.${priority}`);
+    return `
+        <li class="cloud-task-item ${task.completed ? 'is-completed' : ''}" data-id="${escapeAttr(task.id)}">
+            <button type="button"
+                class="cloud-task-checkbox ${task.completed ? 'is-checked' : ''}"
+                data-cloud-action="toggle"
+                aria-pressed="${task.completed}"
+                aria-label="${task.completed ? t('aria.markNotCompleted') : t('aria.markCompleted')}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+            </button>
+            <span class="cloud-task-text">${escapeHtml(task.text || '')}</span>
+            <span class="cloud-task-meta">
+                <span class="cloud-task-badge priority-${escapeAttr(priority)}">${escapeHtml(priorityLabel)}</span>
+            </span>
+            <button type="button"
+                class="cloud-task-delete"
+                data-cloud-action="delete"
+                aria-label="${t('aria.delete')}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <polyline points="3 6 5 6 21 6"></polyline>
+                    <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"></path>
+                </svg>
+            </button>
+        </li>
+    `;
+};
+
+/**
+ * 渲染云端工作区：未登录不展示；登录后展示云任务列表
+ * 区分 Local/Cloud：本地任务在主列表，云任务在此列表
+ */
+const renderCloudWorkspace = () => {
+    if (!state.auth.user) {
+        elements.cloudWorkspaceSection.classList.add('hidden');
+        elements.cloudTaskList.innerHTML = '';
+        return;
+    }
+
+    elements.cloudWorkspaceSection.classList.remove('hidden');
+
+    if (state.cloudTasks.length === 0) {
+        elements.cloudTaskList.innerHTML = `<li class="cloud-empty">${t('account.noCloudTasks')}</li>`;
+        return;
+    }
+
+    elements.cloudTaskList.innerHTML = state.cloudTasks.map(createCloudTaskHTML).join('');
+};
+
+/**
+ * 更新页头账号入口：未登录显示"登录以同步"，登录显示邮箱 + 退出按钮
+ * 邮箱写入 DOM 前 escapeHtml
+ */
+const updateAuthUI = () => {
+    const user = state.auth.user;
+    if (user) {
+        elements.authBtn.classList.add('is-signed-in');
+        // 邮箱经 escapeHtml 防 XSS；textContent 也安全，但保持一致用 innerHTML
+        elements.authBtn.textContent = user.email || '';
+        elements.authLogoutBtn.classList.remove('hidden');
+    } else {
+        elements.authBtn.classList.remove('is-signed-in');
+        elements.authBtn.textContent = t('account.signInToSync');
+        elements.authLogoutBtn.classList.add('hidden');
+    }
+};
+
+/**
+ * 模态点击委托：close 按钮 / tab 切换
+ * @param {Event} event
+ */
+const handleAuthModalClick = (event) => {
+    // 点遮罩空白处关闭
+    if (event.target === elements.authModal) {
+        closeAuthModal();
+        return;
+    }
+
+    const closeBtn = event.target.closest('[data-auth-action="close"]');
+    if (closeBtn) {
+        closeAuthModal();
+        return;
+    }
+
+    const tabBtn = event.target.closest('[data-auth-tab]');
+    if (tabBtn) {
+        switchAuthTab(tabBtn.dataset.authTab);
+    }
+};
+
+/**
+ * 模态键盘：Escape 关闭
+ * @param {KeyboardEvent} event
+ */
+const handleAuthModalKeydown = (event) => {
+    if (event.key !== 'Escape') return;
+    if (!elements.authModal.classList.contains('hidden')) {
+        event.preventDefault();
+        closeAuthModal();
+    }
+};
+
+/**
+ * 云任务列表点击委托：toggle / delete
+ * @param {Event} event
+ */
+const handleCloudTaskClick = (event) => {
+    const actionEl = event.target.closest('[data-cloud-action]');
+    if (!actionEl) return;
+    const item = actionEl.closest('.cloud-task-item');
+    if (!item) return;
+    const taskId = item.dataset.id;
+    const action = actionEl.dataset.cloudAction;
+    if (action === 'toggle') {
+        toggleCloudTask(taskId);
+    } else if (action === 'delete') {
+        deleteCloudTask(taskId);
+    }
+};
+
+/**
+ * 初始化账号模块：GET /api/auth/me → 若登录设 state.auth.user + 拉云任务 + 更新页头
+ * 未登录保持本地优先（v4 行为不变）
+ */
+const initAuth = async () => {
+    updateAuthUI();
+
+    // 静态绑定事件（一次性）
+    elements.authBtn.addEventListener('click', () => {
+        if (state.auth.user) {
+            // 已登录时点击邮箱也打开模态（可在模态里退出）
+            openAuthModal('login');
+        } else {
+            openAuthModal('login');
+        }
+    });
+    elements.authLogoutBtn.addEventListener('click', handleLogout);
+    elements.authModal.addEventListener('click', handleAuthModalClick);
+    elements.authModal.addEventListener('keydown', handleAuthModalKeydown);
+    elements.authLoginForm.addEventListener('submit', handleAuthSubmit);
+    elements.authRegisterForm.addEventListener('submit', handleAuthSubmit);
+    elements.cloudTaskList.addEventListener('click', handleCloudTaskClick);
+
+    // 页面加载时探测登录态（非阻断：失败按未登录处理，本地优先）
+    try {
+        const response = await fetch('/api/auth/me', {
+            headers: { 'Accept-Language': currentLang === 'en' ? 'en' : 'zh' }
+        });
+        if (!response.ok) return;
+        const data = await response.json().catch(() => null);
+        if (data && data.user) {
+            state.auth.user = data.user;
+            updateAuthUI();
+            await fetchCloudTasks();
+        }
+    } catch (error) {
+        // 服务未启动 / 网络错误 → 静默按未登录处理，本地工作区照常可用
+        console.error('Auth probe failed:', error);
+    }
+};
+
+/**
+ * 语言切换时重渲染账号入口与云端工作区
+ */
+const refreshAuthOnLangChange = () => {
+    updateAuthUI();
+    renderCloudWorkspace();
+};
+
+// ========================================
 // Initialization
 // ========================================
 
@@ -2311,6 +2792,7 @@ const init = () => {
         rerenderFormPreservingDraft();
         refreshFocusOverlayOnLangChange();
         renderExtractionResults();
+        refreshAuthOnLangChange();
     });
 
     // Attach event listeners (container-level delegation, one listener each)
@@ -2339,6 +2821,9 @@ const init = () => {
 
     // v3 Focus Flow: restore any in-progress session, then focus the input
     restoreFocusSession();
+
+    // v5 Account & Cloud Workspace: probe login state (non-blocking, local-first)
+    initAuth();
 
     // Focus the input
     elements.todoInput.focus();

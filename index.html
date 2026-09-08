@@ -18,8 +18,116 @@
                 <button type="button" class="lang-btn active" data-lang="zh" aria-pressed="true" aria-label="切换到中文">中</button>
                 <button type="button" class="lang-btn" data-lang="en" aria-pressed="false" aria-label="Switch to English">EN</button>
             </div>
+            <div class="auth-entry" role="group">
+                <button type="button" id="authBtn" class="auth-btn" data-i18n="account.signInToSync" data-i18n-aria="aria.authBtn">
+                    登录以同步
+                </button>
+                <button type="button" id="authLogoutBtn" class="auth-btn auth-logout-btn hidden" data-i18n="account.signOut" data-i18n-aria="account.signOut">
+                    退出
+                </button>
+            </div>
             <h1 class="app-title" data-i18n="app.title">待办</h1>
             <p class="app-subtitle" data-i18n="app.subtitle">规划你的任务，从容开启每一天。</p>
+
+            <!-- Account modal (login / register) -->
+            <div id="authModal" class="auth-modal hidden" role="dialog" aria-modal="true" aria-labelledby="authModalTitle">
+                <div class="auth-modal-card">
+                    <button type="button" class="auth-close" data-auth-action="close" data-i18n-aria="aria.authClose" aria-label="关闭对话框">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                    <h2 id="authModalTitle" class="auth-modal-title" data-i18n="account.authModalTitle">账号</h2>
+                    <div class="auth-tabs" role="tablist" aria-label="账号">
+                        <button type="button" class="auth-tab active" data-auth-tab="login" role="tab" aria-selected="true" data-i18n="account.loginTab">登录</button>
+                        <button type="button" class="auth-tab" data-auth-tab="register" role="tab" aria-selected="false" data-i18n="account.registerTab">注册</button>
+                    </div>
+                    <p id="authError" class="auth-error" role="alert"></p>
+                    <!-- Login form -->
+                    <form id="authLoginForm" class="auth-form" data-auth-mode="login" novalidate>
+                        <div class="auth-field">
+                            <label for="authLoginEmail" data-i18n="account.email">邮箱</label>
+                            <input
+                                type="email"
+                                id="authLoginEmail"
+                                name="email"
+                                autocomplete="email"
+                                required
+                                placeholder="邮箱"
+                                data-i18n-placeholder="account.email"
+                                data-i18n-aria="aria.authEmail"
+                                aria-label="邮箱输入"
+                            >
+                        </div>
+                        <div class="auth-field">
+                            <label for="authLoginPassword" data-i18n="account.password">密码</label>
+                            <input
+                                type="password"
+                                id="authLoginPassword"
+                                name="password"
+                                autocomplete="current-password"
+                                required
+                                placeholder="密码"
+                                data-i18n-placeholder="account.password"
+                                data-i18n-aria="aria.authPassword"
+                                aria-label="密码输入"
+                            >
+                        </div>
+                        <button type="submit" class="auth-submit" data-i18n="account.signIn" data-i18n-aria="aria.authSubmit" aria-label="提交">
+                            登录
+                        </button>
+                    </form>
+                    <!-- Register form -->
+                    <form id="authRegisterForm" class="auth-form hidden" data-auth-mode="register" novalidate>
+                        <div class="auth-field">
+                            <label for="authRegEmail" data-i18n="account.email">邮箱</label>
+                            <input
+                                type="email"
+                                id="authRegEmail"
+                                name="email"
+                                autocomplete="email"
+                                required
+                                placeholder="邮箱"
+                                data-i18n-placeholder="account.email"
+                                data-i18n-aria="aria.authEmail"
+                                aria-label="邮箱输入"
+                            >
+                        </div>
+                        <div class="auth-field">
+                            <label for="authRegPassword" data-i18n="account.password">密码</label>
+                            <input
+                                type="password"
+                                id="authRegPassword"
+                                name="password"
+                                autocomplete="new-password"
+                                required
+                                placeholder="密码"
+                                data-i18n-placeholder="account.password"
+                                data-i18n-aria="aria.authPassword"
+                                aria-label="密码输入"
+                            >
+                        </div>
+                        <div class="auth-field">
+                            <label for="authRegConfirm" data-i18n="account.confirmPassword">确认密码</label>
+                            <input
+                                type="password"
+                                id="authRegConfirm"
+                                name="confirmPassword"
+                                autocomplete="new-password"
+                                required
+                                placeholder="确认密码"
+                                data-i18n-placeholder="account.confirmPassword"
+                                data-i18n-aria="aria.authConfirmPassword"
+                                aria-label="确认密码输入"
+                            >
+                        </div>
+                        <button type="submit" class="auth-submit" data-i18n="account.signUp" data-i18n-aria="aria.authSubmit" aria-label="提交">
+                            注册
+                        </button>
+                    </form>
+                </div>
+            </div>
         </header>
 
         <div class="dashboard-grid">
@@ -181,6 +289,17 @@
                 </ul>
             </aside>
         </div>
+
+        <!-- Cloud workspace (shown only when signed in) -->
+        <section id="cloudWorkspaceSection" class="cloud-workspace-section hidden" aria-label="云端工作区" data-i18n-aria="aria.cloudTaskList">
+            <header class="cloud-workspace-header">
+                <h2 class="panel-title" data-i18n="account.cloudWorkspace">云端工作区</h2>
+                <span class="cloud-workspace-hint" data-i18n="account.noCloudTasks">暂无云端任务</span>
+            </header>
+            <ul id="cloudTaskList" class="cloud-task-list" aria-label="云端任务列表" data-i18n-aria="aria.cloudTaskList">
+                <!-- Cloud tasks rendered by app.js -->
+            </ul>
+        </section>
     </div>
 
     <script src="js/i18n.js"></script>

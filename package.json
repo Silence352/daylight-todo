@@ -1,14 +1,15 @@
 {
-  "name": "simple-to-do-list-v4",
-  "version": "4.0.0",
+  "name": "simple-to-do-list-v5",
+  "version": "5.0.0",
   "private": true,
   "type": "module",
-  "description": "Daylight To-Do v4 — Smart Task Extraction (Express + OpenAI-compatible model)",
+  "description": "Daylight To-Do v5 — Accounts and Cloud Workspace (Express + SQLite + auth + cloud tasks)",
   "scripts": {
     "start": "node server/index.js",
     "test": "node --test server/test/*.test.js"
   },
   "dependencies": {
+    "better-sqlite3": "^11.3.0",
     "express": "^4.19.2"
   },
   "engines": {
