@@ -1068,6 +1068,12 @@ const createTodoItemHTML = (todo, options = {}) => {
                 ${metaBadges.length > 0 ? `<div class="todo-meta">${metaBadges.join('')}</div>` : ''}
             </div>
             <div class="todo-actions">
+                <button class="todo-action-btn start-focus" data-action="start-focus" aria-label="${t('aria.focusStart')}">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="9"></circle>
+                        <polygon points="10 8 16 12 10 16 10 8" fill="currentColor"></polygon>
+                    </svg>
+                </button>
                 <button class="todo-action-btn edit" data-action="edit" aria-label="${t('aria.edit')}">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"></path>
@@ -1209,6 +1215,9 @@ const handleCardClick = (event) => {
         case 'edit':
             startEditTodo(todoId);
             break;
+        case 'start-focus':
+            openFocusDurationPicker(todoId, todoItem);
+            break;
     }
 };
 
@@ -1289,6 +1298,631 @@ const handleFilterClick = (event) => {
 };
 
 // ========================================
+// Focus Flow (v3) — immersive focus session
+// 状态机：idle → running ⇄ paused → completed
+// 持久化：localStorage 'daylight-focus-session'
+// 计时：setInterval(250ms) 仅刷新显示，剩余时间始终由 (duration - elapsedMs) 计算
+// ========================================
+
+const FOCUS_STORAGE_KEY = 'daylight-focus-session';
+const FOCUS_TICK_MS = 250;
+const FOCUS_PERSIST_INTERVAL_MS = 5000;
+const FOCUS_DURATION_PRESETS = [25, 45];
+
+/**
+ * Focus session state (single source of truth for the overlay)
+ * @type {Object|null}
+ */
+let focusSession = null;
+
+/** @type {number|null} setInterval handle for the visible tick */
+let focusTickHandle = null;
+
+/** @type {number|null} timestamp of last periodic persist */
+let focusLastPersistAt = null;
+
+/**
+ * Reads the saved focus session from localStorage (defensive)
+ * @returns {Object|null}
+ */
+const readFocusSession = () => {
+    try {
+        const raw = localStorage.getItem(FOCUS_STORAGE_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object') return null;
+        return parsed;
+    } catch (error) {
+        console.error('Focus session read error:', error);
+        return null;
+    }
+};
+
+/**
+ * Persists the focus session to localStorage (defensive)
+ * @param {Object|null} session
+ */
+const writeFocusSession = (session) => {
+    try {
+        if (session) {
+            localStorage.setItem(FOCUS_STORAGE_KEY, JSON.stringify(session));
+        } else {
+            localStorage.removeItem(FOCUS_STORAGE_KEY);
+        }
+    } catch (error) {
+        console.error('Focus session write error:', error);
+    }
+};
+
+/**
+ * Formats milliseconds as mm:ss (clamped at 0)
+ * @param {number} ms
+ * @returns {string}
+ */
+const formatFocusClock = (ms) => {
+    const clamped = Math.max(0, ms);
+    const totalSec = Math.floor(clamped / 1000);
+    const m = String(Math.floor(totalSec / 60)).padStart(2, '0');
+    const s = String(totalSec % 60).padStart(2, '0');
+    return `${m}:${s}`;
+};
+
+/**
+ * Returns the live remaining milliseconds for a running session,
+ * accounting for time elapsed since lastTickAt. For paused sessions
+ * returns the frozen remaining value. Never negative.
+ * @param {Object} session
+ * @returns {number}
+ */
+const computeFocusRemainingMs = (session) => {
+    if (session.status === 'running' && typeof session.lastTickAt === 'number') {
+        const now = Date.now();
+        const advanced = now - session.lastTickAt;
+        return Math.max(0, session.duration - session.elapsedMs - advanced);
+    }
+    return Math.max(0, session.duration - session.elapsedMs);
+};
+
+/**
+ * Returns the live elapsed milliseconds (running: includes unsaved advance)
+ * @param {Object} session
+ * @returns {number}
+ */
+const computeFocusElapsedMs = (session) => {
+    return Math.max(0, session.duration - computeFocusRemainingMs(session));
+};
+
+// ----------------------------------------
+// Duration picker popover (entry point)
+// ----------------------------------------
+
+/**
+ * Closes any open duration picker (and its backdrop)
+ */
+const closeFocusDurationPicker = () => {
+    const popover = document.querySelector('.focus-duration-popover');
+    const backdrop = document.querySelector('.focus-duration-backdrop');
+    if (popover) popover.remove();
+    if (backdrop) backdrop.remove();
+};
+
+/**
+ * Opens the duration picker anchored above the start-focus button
+ * @param {string} todoId
+ * @param {HTMLElement} anchorItem - todo item element (for positioning)
+ */
+const openFocusDurationPicker = (todoId, anchorItem) => {
+    closeFocusDurationPicker();
+
+    const todo = state.todos.find(t => t.id === todoId);
+    if (!todo) return;
+
+    // Don't allow starting focus on a completed task
+    if (todo.completed) return;
+
+    const popover = document.createElement('div');
+    popover.className = 'focus-duration-popover';
+    popover.setAttribute('role', 'menu');
+    popover.setAttribute('aria-label', t('aria.focusDurationPicker'));
+
+    popover.innerHTML = `
+        <span class="focus-duration-popover-title">${t('focus.chooseDuration')}</span>
+        ${FOCUS_DURATION_PRESETS.map(min => `
+            <button type="button"
+                class="focus-duration-option"
+                role="menuitem"
+                data-focus-duration="${min}"
+                aria-label="${min === 25 ? t('aria.focusDuration25') : t('aria.focusDuration45')}">
+                <span>${t(`focus.duration${min}`)}</span>
+                <span class="duration-min">${min} ${t('form.estimateUnit')}</span>
+            </button>
+        `).join('')}
+    `;
+
+    // Position: place above the anchor item, aligned to its right edge
+    const rect = anchorItem.getBoundingClientRect();
+    const popoverWidth = 180;
+    const popoverHeight = 120;
+    popover.style.position = 'fixed';
+    popover.style.top = `${Math.max(8, rect.top - popoverHeight - 8)}px`;
+    popover.style.left = `${Math.min(window.innerWidth - popoverWidth - 8, Math.max(8, rect.right - popoverWidth))}px`;
+
+    document.body.appendChild(popover);
+
+    const backdrop = document.createElement('div');
+    backdrop.className = 'focus-duration-backdrop';
+    backdrop.addEventListener('click', closeFocusDurationPicker);
+    document.body.appendChild(backdrop);
+
+    popover.addEventListener('click', (event) => {
+        const opt = event.target.closest('[data-focus-duration]');
+        if (!opt) return;
+        const minutes = Number(opt.dataset.focusDuration);
+        closeFocusDurationPicker();
+        startFocusSession(todoId, minutes);
+    });
+
+    // Keyboard: Esc closes, first option focusable
+    popover.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            closeFocusDurationPicker();
+        }
+    });
+
+    const firstOption = popover.querySelector('.focus-duration-option');
+    if (firstOption) firstOption.focus();
+};
+
+// ----------------------------------------
+// Session lifecycle
+// ----------------------------------------
+
+/**
+ * Starts a new focus session for a todo
+ * @param {string} todoId
+ * @param {number} minutes - 25 or 45
+ */
+const startFocusSession = (todoId, minutes) => {
+    const todo = state.todos.find(t => t.id === todoId);
+    if (!todo) return;
+    if (todo.completed) return;
+
+    const now = Date.now();
+    focusSession = {
+        todoId,
+        duration: minutes * 60 * 1000,
+        startedAt: now,
+        elapsedMs: 0,
+        status: 'running',
+        lastTickAt: now
+    };
+    focusLastPersistAt = now;
+    writeFocusSession(focusSession);
+    renderFocusOverlay();
+    startFocusTick();
+};
+
+/**
+ * Pauses a running session (freezes elapsedMs at the live value)
+ */
+const pauseFocusSession = () => {
+    if (!focusSession || focusSession.status !== 'running') return;
+    focusSession.elapsedMs = computeFocusElapsedMs(focusSession);
+    focusSession.status = 'paused';
+    focusSession.lastTickAt = null;
+    stopFocusTick();
+    writeFocusSession(focusSession);
+    renderFocusOverlay();
+};
+
+/**
+ * Resumes a paused session
+ */
+const resumeFocusSession = () => {
+    if (!focusSession || focusSession.status !== 'paused') return;
+    const now = Date.now();
+    focusSession.status = 'running';
+    focusSession.lastTickAt = now;
+    focusLastPersistAt = now;
+    writeFocusSession(focusSession);
+    renderFocusOverlay();
+    startFocusTick();
+};
+
+/**
+ * Ends the session early (user-initiated). Triggers completion path
+ * but does NOT auto-mark the linked task done (user can opt-in).
+ */
+const endFocusSession = () => {
+    if (!focusSession) return;
+    if (focusSession.status === 'running') {
+        focusSession.elapsedMs = computeFocusElapsedMs(focusSession);
+    }
+    focusSession.status = 'completed';
+    focusSession.lastTickAt = null;
+    stopFocusTick();
+    writeFocusSession(focusSession);
+    renderFocusOverlay();
+    // Insights/ring already reflect todo state; we keep them in sync via commit()
+    // in case the user later marks the task done.
+};
+
+/**
+ * Marks the linked task as completed and refreshes dashboard
+ */
+const markFocusTaskDone = () => {
+    if (!focusSession) return;
+    const todo = state.todos.find(t => t.id === focusSession.todoId);
+    if (!todo || todo.completed) return;
+    todo.completed = true;
+    todo.completedAt = new Date().toISOString();
+    commit();
+    // Update the mark-done button visual state
+    const btn = document.querySelector('.focus-mark-done');
+    if (btn) {
+        btn.classList.add('is-done');
+        btn.setAttribute('aria-disabled', 'true');
+    }
+    showToast(t('focus.taskMarkedDone'));
+};
+
+/**
+ * Closes the overlay and clears the session entirely
+ * (called from "Back to dashboard" after completion)
+ */
+const closeFocusOverlay = () => {
+    stopFocusTick();
+    focusSession = null;
+    focusLastPersistAt = null;
+    writeFocusSession(null);
+    const overlay = document.querySelector('.focus-overlay');
+    if (overlay) overlay.remove();
+};
+
+// ----------------------------------------
+// Tick (display refresh + periodic persist)
+// ----------------------------------------
+
+/**
+ * Starts the visible tick (250ms). The tick only refreshes the display
+ * and periodically persists; the remaining time is always recomputed
+ * from (duration - elapsedMs - advance) so there is no drift.
+ */
+const startFocusTick = () => {
+    stopFocusTick();
+    focusTickHandle = setInterval(() => {
+        if (!focusSession || focusSession.status !== 'running') return;
+        refreshFocusOverlayTime();
+        const now = Date.now();
+        if (focusLastPersistAt === null
+            || now - focusLastPersistAt >= FOCUS_PERSIST_INTERVAL_MS) {
+            // Persist a snapshot with the live elapsedMs folded in
+            const snapshot = {
+                ...focusSession,
+                elapsedMs: computeFocusElapsedMs(focusSession),
+                lastTickAt: now
+            };
+            focusSession = snapshot;
+            writeFocusSession(snapshot);
+            focusLastPersistAt = now;
+        }
+        // Auto-complete when time runs out
+        if (computeFocusRemainingMs(focusSession) <= 0) {
+            focusSession.elapsedMs = focusSession.duration;
+            focusSession.status = 'completed';
+            focusSession.lastTickAt = null;
+            stopFocusTick();
+            writeFocusSession(focusSession);
+            renderFocusOverlay();
+        }
+    }, FOCUS_TICK_MS);
+};
+
+/**
+ * Stops the visible tick
+ */
+const stopFocusTick = () => {
+    if (focusTickHandle !== null) {
+        clearInterval(focusTickHandle);
+        focusTickHandle = null;
+    }
+};
+
+/**
+ * Refreshes only the time display & ring (lightweight, no full re-render)
+ */
+const refreshFocusOverlayTime = () => {
+    if (!focusSession) return;
+    const remainingMs = computeFocusRemainingMs(focusSession);
+    const elapsedMs = computeFocusElapsedMs(focusSession);
+    const display = document.querySelector('.focus-time-display');
+    if (display) display.textContent = formatFocusClock(remainingMs);
+
+    const ring = document.querySelector('.focus-ring-progress');
+    if (ring) {
+        const r = 52;
+        const circumference = 2 * Math.PI * r;
+        const fraction = focusSession.duration > 0
+            ? Math.min(1, elapsedMs / focusSession.duration)
+            : 0;
+        ring.style.strokeDasharray = `${circumference}`;
+        ring.style.strokeDashoffset = `${circumference * (1 - fraction)}`;
+    }
+
+    const ringAria = document.querySelector('.focus-time-ring');
+    if (ringAria) {
+        ringAria.setAttribute('aria-label',
+            `${t('focus.remaining')} ${formatFocusClock(remainingMs)}`);
+    }
+};
+
+// ----------------------------------------
+// Overlay rendering
+// ----------------------------------------
+
+/**
+ * Builds the immersive overlay HTML for the current focusSession
+ * @returns {string}
+ */
+const buildFocusOverlayHTML = () => {
+    const session = focusSession;
+    const todo = state.todos.find(t => t.id === session.todoId);
+    const taskTitle = todo ? todo.text : t('focus.taskMissing');
+    const taskOpen = todo && !todo.completed;
+    const remainingMs = computeFocusRemainingMs(session);
+    const elapsedMs = computeFocusElapsedMs(session);
+    const isCompleted = session.status === 'completed';
+    const isPaused = session.status === 'paused';
+
+    const r = 52;
+    const circumference = 2 * Math.PI * r;
+    const fraction = session.duration > 0
+        ? Math.min(1, elapsedMs / session.duration)
+        : 0;
+    const dashOffset = circumference * (1 - fraction);
+
+    const primaryBtn = isCompleted
+        ? `<button type="button" class="focus-btn focus-btn-primary" data-focus-action="close">
+             <span>${t('focus.backToDashboard')}</span>
+           </button>`
+        : (isPaused
+            ? `<button type="button" class="focus-btn focus-btn-primary" data-focus-action="resume" aria-label="${t('aria.focusResume')}">
+                 <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"></polygon></svg>
+                 <span>${t('focus.resume')}</span>
+               </button>`
+            : `<button type="button" class="focus-btn focus-btn-primary" data-focus-action="pause" aria-label="${t('aria.focusPause')}">
+                 <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14"></rect><rect x="14" y="5" width="4" height="14"></rect></svg>
+                 <span>${t('focus.pause')}</span>
+               </button>`);
+
+    const endBtn = isCompleted
+        ? ''
+        : `<button type="button" class="focus-btn focus-btn-danger" data-focus-action="end" aria-label="${t('aria.focusEnd')}">
+             <span>${t('focus.end')}</span>
+           </button>`;
+
+    const markDoneBtn = (isCompleted && taskOpen)
+        ? `<button type="button" class="focus-mark-done" data-focus-action="mark-done" aria-label="${t('aria.focusMarkDone')}">
+             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+             <span>${t('focus.markTaskDone')}</span>
+           </button>`
+        : '';
+
+    const statusLabel = isCompleted
+        ? t('focus.completed')
+        : (isPaused ? t('focus.pausedLabel') : t('focus.modeTitle'));
+
+    return `
+        <div class="focus-overlay-card" role="dialog" aria-modal="true" aria-labelledby="focusModeLabel">
+            <span class="focus-mode-label" id="focusModeLabel">${t('focus.modeTitle')}</span>
+            <p class="focus-task-title">${escapeHtml(taskTitle)}</p>
+            <div class="focus-time-ring" role="img" aria-label="${t('focus.remaining')} ${formatFocusClock(remainingMs)}">
+                <svg viewBox="0 0 120 120" aria-hidden="true" focusable="false">
+                    <circle class="focus-ring-track" cx="60" cy="60" r="52"></circle>
+                    <circle class="focus-ring-progress" cx="60" cy="60" r="52"
+                        style="stroke-dasharray:${circumference};stroke-dashoffset:${dashOffset}"></circle>
+                </svg>
+                <span class="focus-time-display">${formatFocusClock(remainingMs)}</span>
+                <span class="focus-time-status">${statusLabel}</span>
+            </div>
+            <div class="focus-completed-banner">
+                <span class="focus-completed-title">${t('focus.completed')}</span>
+                <span class="focus-completed-hint">${t('focus.completedHint')}</span>
+            </div>
+            ${markDoneBtn}
+            <div class="focus-controls">
+                ${primaryBtn}
+                ${endBtn}
+            </div>
+        </div>
+    `;
+};
+
+/**
+ * (Re)renders the immersive overlay to reflect the current session state.
+ * Re-uses the existing element when possible to preserve focus.
+ */
+const renderFocusOverlay = () => {
+    if (!focusSession) return;
+
+    let overlay = document.querySelector('.focus-overlay');
+    const isCompleted = focusSession.status === 'completed';
+    const isPaused = focusSession.status === 'paused';
+    const todo = state.todos.find(t => t.id === focusSession.todoId);
+    const showMarkDone = isCompleted && todo && !todo.completed;
+
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.className = 'focus-overlay';
+        overlay.setAttribute('role', 'region');
+        overlay.setAttribute('aria-label', t('aria.focusOverlay'));
+        overlay.addEventListener('click', handleFocusOverlayClick);
+        overlay.addEventListener('keydown', handleFocusOverlayKeydown);
+        document.body.appendChild(overlay);
+    }
+
+    overlay.classList.toggle('is-paused', isPaused);
+    overlay.classList.toggle('is-completed', isCompleted);
+    overlay.classList.toggle('show-mark-done', showMarkDone);
+    overlay.innerHTML = buildFocusOverlayHTML();
+
+    // Auto-focus the primary button for keyboard users
+    const primary = overlay.querySelector('.focus-btn-primary, .focus-mark-done');
+    if (primary) primary.focus();
+};
+
+/**
+ * Click delegation inside the overlay
+ * @param {Event} event
+ */
+const handleFocusOverlayClick = (event) => {
+    const btn = event.target.closest('[data-focus-action]');
+    if (!btn) return;
+    const action = btn.dataset.focusAction;
+    switch (action) {
+        case 'pause':
+            pauseFocusSession();
+            break;
+        case 'resume':
+            resumeFocusSession();
+            break;
+        case 'end':
+            endFocusSession();
+            break;
+        case 'close':
+            closeFocusOverlay();
+            break;
+        case 'mark-done':
+            markFocusTaskDone();
+            break;
+    }
+};
+
+/**
+ * Keyboard: Esc ends (or closes if completed); Space toggles pause/resume
+ * @param {KeyboardEvent} event
+ */
+const handleFocusOverlayKeydown = (event) => {
+    if (!focusSession) return;
+    const isCompleted = focusSession.status === 'completed';
+
+    if (event.key === 'Escape') {
+        event.preventDefault();
+        if (isCompleted) {
+            closeFocusOverlay();
+        } else {
+            endFocusSession();
+        }
+        return;
+    }
+
+    if (event.code === 'Space' || event.key === ' ') {
+        // Avoid stealing space from buttons (let button activation happen natively)
+        if (event.target.closest('button')) return;
+        event.preventDefault();
+        if (isCompleted) return;
+        if (focusSession.status === 'running') {
+            pauseFocusSession();
+        } else if (focusSession.status === 'paused') {
+            resumeFocusSession();
+        }
+    }
+};
+
+// ----------------------------------------
+// Restore on page load
+// ----------------------------------------
+
+/**
+ * Restores an in-progress or paused focus session on page load.
+ * - running: fold in time elapsed since lastTickAt; if elapsed ≥ duration,
+ *   mark completed (no overlay re-open); otherwise resume the overlay + tick
+ * - paused: re-open the overlay in paused state, no tick
+ * - completed: do not re-open the overlay (one-shot completion notice)
+ */
+const restoreFocusSession = () => {
+    const saved = readFocusSession();
+    if (!saved) return;
+
+    // Validate shape
+    if (typeof saved.todoId !== 'string'
+        || typeof saved.duration !== 'number'
+        || typeof saved.elapsedMs !== 'number'
+        || (saved.status !== 'running' && saved.status !== 'paused' && saved.status !== 'completed')) {
+        writeFocusSession(null);
+        return;
+    }
+
+    const now = Date.now();
+
+    if (saved.status === 'running') {
+        const lastTick = typeof saved.lastTickAt === 'number' ? saved.lastTickAt : now;
+        const advanced = Math.max(0, now - lastTick);
+        const newElapsed = saved.elapsedMs + advanced;
+        if (newElapsed >= saved.duration) {
+            // Session completed while the tab was closed — do not re-open overlay
+            const completed = {
+                ...saved,
+                elapsedMs: saved.duration,
+                status: 'completed',
+                lastTickAt: null
+            };
+            writeFocusSession(completed);
+            return;
+        }
+        focusSession = {
+            ...saved,
+            elapsedMs: newElapsed,
+            lastTickAt: now
+        };
+        focusLastPersistAt = now;
+        writeFocusSession(focusSession);
+        renderFocusOverlay();
+        startFocusTick();
+        showFocusRestoredToast();
+        return;
+    }
+
+    if (saved.status === 'paused') {
+        focusSession = { ...saved, lastTickAt: null };
+        focusLastPersistAt = null;
+        renderFocusOverlay();
+        showFocusRestoredToast();
+        return;
+    }
+
+    // status === 'completed' — leave it; overlay stays closed
+};
+
+/**
+ * Shows a brief "session restored" toast
+ */
+let focusRestoredToastTimer = null;
+const showFocusRestoredToast = () => {
+    let toast = document.querySelector('.focus-restored-toast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.className = 'focus-restored-toast';
+        toast.setAttribute('role', 'status');
+        document.body.appendChild(toast);
+    }
+    toast.textContent = t('focus.sessionRestored');
+    toast.classList.add('show');
+    if (focusRestoredToastTimer) clearTimeout(focusRestoredToastTimer);
+    focusRestoredToastTimer = setTimeout(() => toast.classList.remove('show'), 2400);
+};
+
+/**
+ * Re-renders the focus overlay text when the language changes
+ * (does not touch the timer state)
+ */
+const refreshFocusOverlayOnLangChange = () => {
+    if (!focusSession) return;
+    renderFocusOverlay();
+};
+
+// ========================================
 // Initialization
 // ========================================
 
@@ -1312,6 +1946,7 @@ const init = () => {
     document.addEventListener('languagechange', () => {
         renderAll();
         rerenderFormPreservingDraft();
+        refreshFocusOverlayOnLangChange();
     });
 
     // Attach event listeners (container-level delegation, one listener each)
@@ -1333,6 +1968,9 @@ const init = () => {
     elements.filterButtons.forEach(btn => {
         btn.addEventListener('click', handleFilterClick);
     });
+
+    // v3 Focus Flow: restore any in-progress session, then focus the input
+    restoreFocusSession();
 
     // Focus the input
     elements.todoInput.focus();
