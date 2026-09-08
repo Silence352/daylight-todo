@@ -19,7 +19,11 @@ const state = {
     currentProjectId: 'all',
     editingId: null,
     formOpen: false,
-    formError: null
+    formError: null,
+    // v4 Smart Extraction
+    extractionDrafts: [],
+    extractionLoading: false,
+    extractionError: null
 };
 
 // Local Storage key & schema version
@@ -55,6 +59,9 @@ const elements = {
     emptyHint: document.querySelector('#emptyState .empty-hint'),
     clearCompleted: document.getElementById('clearCompleted'),
     focusPanel: document.getElementById('focusPanel'),
+    // v4 Smart Extraction
+    extractBtn: document.getElementById('extractBtn'),
+    extractionResults: document.getElementById('extractionResults'),
     // Left column
     navEntryList: document.getElementById('navEntryList'),
     projectForm: document.getElementById('projectForm'),
@@ -1923,6 +1930,362 @@ const refreshFocusOverlayOnLangChange = () => {
 };
 
 // ========================================
+// Smart Task Extraction (v4) — AI 草稿拆解
+// 流程：用户输入自然语言 → POST /api/task-extractions → 展示可编辑草稿卡片
+//       → 用户勾选并点"添加到今日" → 复用 v3 commit 管线写入工作区
+// 不伪造不静默降级：失败时保留原始输入 + 真实错误消息
+// ========================================
+
+/**
+ * 转义字符串以安全用作 HTML 属性值（在 escapeHtml 基础上再转义引号）
+ * @param {string} text
+ * @returns {string}
+ */
+const escapeAttr = (text) => escapeHtml(String(text ?? '')).replace(/"/g, '&quot;');
+
+/**
+ * 把草稿的 project 名称解析为 projectId：匹配已有项目则用其 id，
+ * 否则在 state.projects 中新建（不 commit，由调用方统一 commit）
+ * @param {string} projectName
+ * @returns {string|null}
+ */
+const resolveProjectIdForDraft = (projectName) => {
+    const trimmed = (projectName || '').trim();
+    if (!trimmed) return null;
+    const existing = state.projects.find(p => p.name === trimmed);
+    if (existing) return existing.id;
+    const newProject = {
+        id: generateId(),
+        name: trimmed.slice(0, PROJECT_NAME_MAX),
+        createdAt: new Date().toISOString()
+    };
+    state.projects.push(newProject);
+    return newProject.id;
+};
+
+/**
+ * 设置智能拆解加载态：按钮 disabled + 文案切换
+ * @param {boolean} loading
+ */
+const setExtractionLoading = (loading) => {
+    state.extractionLoading = loading;
+    const btn = elements.extractBtn;
+    if (!btn) return;
+    btn.disabled = loading;
+    btn.classList.toggle('is-loading', loading);
+    btn.textContent = loading ? t('extraction.extracting') : t('extraction.action');
+};
+
+/**
+ * 清空草稿区并隐藏
+ */
+const clearExtractionResults = () => {
+    state.extractionDrafts = [];
+    state.extractionError = null;
+    elements.extractionResults.innerHTML = '';
+    elements.extractionResults.classList.add('hidden');
+};
+
+/**
+ * 构造单张草稿卡片 HTML（所有用户/模型字符串经 escapeHtml/escapeAttr）
+ * @param {Object} draft - { id, selected, title, project, priority, dueDate, estimatedMinutes }
+ * @param {number} index - 序号（用于 aria）
+ * @returns {string}
+ */
+const createDraftCardHTML = (draft, index) => {
+    const priorityOptions = ['high', 'medium', 'low'].map(p =>
+        `<option value="${p}" ${draft.priority === p ? 'selected' : ''}>${t(`priority.${p}`)}</option>`
+    ).join('');
+
+    return `
+        <li class="draft-card" data-draft-id="${escapeAttr(draft.id)}">
+            <label class="draft-checkbox">
+                <input
+                    type="checkbox"
+                    ${draft.selected ? 'checked' : ''}
+                    data-draft-action="toggle"
+                    aria-label="${t('aria.draftCheckbox')} ${index + 1}"
+                >
+                <span class="checkmark">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                    </svg>
+                </span>
+            </label>
+            <div class="draft-fields">
+                <div class="draft-field draft-field-title">
+                    <label class="draft-label">${t('extraction.draftTitle')}</label>
+                    <input
+                        type="text"
+                        class="draft-input"
+                        data-draft-field="title"
+                        value="${escapeAttr(draft.title)}"
+                        maxlength="150"
+                        aria-label="${t('aria.draftTitleInput')}"
+                    >
+                </div>
+                <div class="draft-field-grid">
+                    <div class="draft-field">
+                        <label class="draft-label">${t('extraction.draftProject')}</label>
+                        <input
+                            type="text"
+                            class="draft-input"
+                            data-draft-field="project"
+                            value="${escapeAttr(draft.project)}"
+                            maxlength="150"
+                            aria-label="${t('aria.draftProjectInput')}"
+                        >
+                    </div>
+                    <div class="draft-field">
+                        <label class="draft-label">${t('extraction.draftPriority')}</label>
+                        <select class="draft-select" data-draft-field="priority" aria-label="${t('aria.draftPrioritySelect')}">
+                            ${priorityOptions}
+                        </select>
+                    </div>
+                    <div class="draft-field">
+                        <label class="draft-label">${t('extraction.draftDue')}</label>
+                        <input
+                            type="date"
+                            class="draft-input"
+                            data-draft-field="dueDate"
+                            value="${escapeAttr(draft.dueDate || '')}"
+                            aria-label="${t('aria.draftDueInput')}"
+                        >
+                    </div>
+                    <div class="draft-field">
+                        <label class="draft-label">${t('extraction.draftMinutes')}</label>
+                        <input
+                            type="number"
+                            class="draft-input"
+                            data-draft-field="estimatedMinutes"
+                            value="${escapeAttr(draft.estimatedMinutes)}"
+                            min="1"
+                            max="600"
+                            step="1"
+                            aria-label="${t('aria.draftMinutesInput')}"
+                        >
+                    </div>
+                </div>
+            </div>
+            <button
+                type="button"
+                class="draft-remove"
+                data-draft-action="remove"
+                aria-label="${t('aria.removeDraft')} ${index + 1}"
+            >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="3 6 5 6 21 6"></polyline>
+                    <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"></path>
+                </svg>
+            </button>
+        </li>
+    `;
+};
+
+/**
+ * 渲染草稿区：错误消息 / 草稿卡片列表 + 底部"添加到今日"按钮
+ */
+const renderExtractionResults = () => {
+    const section = elements.extractionResults;
+
+    if (state.extractionError) {
+        section.innerHTML = `
+            <div class="extraction-error" role="alert">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="8" x2="12" y2="12"></line>
+                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                </svg>
+                <p>${escapeHtml(state.extractionError)}</p>
+            </div>
+        `;
+        section.classList.remove('hidden');
+        return;
+    }
+
+    const drafts = state.extractionDrafts;
+    if (!drafts || drafts.length === 0) {
+        section.innerHTML = '';
+        section.classList.add('hidden');
+        return;
+    }
+
+    section.innerHTML = `
+        <div class="extraction-header">
+            <h3 class="extraction-title">${t('extraction.sectionTitle')}</h3>
+            <p class="extraction-hint">${t('extraction.sectionHint')}</p>
+        </div>
+        <ul class="draft-list">
+            ${drafts.map((draft, i) => createDraftCardHTML(draft, i)).join('')}
+        </ul>
+        <div class="extraction-footer">
+            <button type="button" class="btn btn-extract-add" data-draft-action="add-selected" aria-label="${t('aria.addSelected')}">
+                ${t('extraction.addSelected')}
+            </button>
+        </div>
+    `;
+    section.classList.remove('hidden');
+};
+
+/**
+ * 触发智能拆解：读取输入 → 调用 API → 渲染草稿 / 错误
+ * 失败时保留用户原始输入（不清空 #todoInput）
+ */
+const handleExtractClick = async () => {
+    if (state.extractionLoading) return;
+
+    const description = elements.todoInput.value.trim();
+    if (!description) {
+        showTransientPlaceholder('error.titleEmpty');
+        elements.todoInput.focus();
+        return;
+    }
+
+    clearExtractionResults();
+    setExtractionLoading(true);
+
+    try {
+        const response = await fetch('/api/task-extractions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept-Language': currentLang === 'en' ? 'en' : 'zh'
+            },
+            body: JSON.stringify({ description })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            // 根据错误码选择最贴切的文案，绝不伪造草稿
+            if (response.status === 503
+                && data && data.error === 'MODEL_NOT_CONFIGURED') {
+                state.extractionError = t('extraction.configMissing');
+            } else {
+                state.extractionError = t('extraction.error');
+            }
+            renderExtractionResults();
+            return;
+        }
+
+        if (!data || !Array.isArray(data.tasks) || data.tasks.length === 0) {
+            state.extractionError = t('extraction.empty');
+            renderExtractionResults();
+            return;
+        }
+
+        // 草稿默认全选
+        state.extractionDrafts = data.tasks.map(task => ({
+            id: generateId(),
+            selected: true,
+            title: task.title || '',
+            project: task.project || '',
+            priority: task.priority || 'medium',
+            dueDate: task.dueDate || null,
+            estimatedMinutes: task.estimatedMinutes || 25
+        }));
+        state.extractionError = null;
+        renderExtractionResults();
+    } catch (error) {
+        // fetch 抛错（服务未启动 / 网络中断）→ 真实错误，保留原始输入
+        console.error('Task extraction failed:', error);
+        state.extractionError = t('extraction.networkError');
+        renderExtractionResults();
+    } finally {
+        setExtractionLoading(false);
+    }
+};
+
+/**
+ * 草稿区点击事件委托：toggle / remove / add-selected
+ * @param {Event} event
+ */
+const handleExtractionClick = (event) => {
+    const actionEl = event.target.closest('[data-draft-action]');
+    if (!actionEl) return;
+    const action = actionEl.dataset.draftAction;
+
+    if (action === 'add-selected') {
+        addSelectedDrafts();
+        return;
+    }
+
+    const card = actionEl.closest('.draft-card');
+    if (!card) return;
+    const draftId = card.dataset.draftId;
+    const draft = state.extractionDrafts.find(d => d.id === draftId);
+    if (!draft) return;
+
+    if (action === 'toggle') {
+        draft.selected = !draft.selected;
+        // checkbox 状态由浏览器切换，这里只同步数据；无需重渲染
+    } else if (action === 'remove') {
+        state.extractionDrafts = state.extractionDrafts.filter(d => d.id !== draftId);
+        renderExtractionResults();
+    }
+};
+
+/**
+ * 草稿字段实时输入：直接更新草稿数据，不重渲染（保留焦点）
+ * @param {Event} event
+ */
+const handleDraftFieldInput = (event) => {
+    const fieldEl = event.target.closest('[data-draft-field]');
+    if (!fieldEl) return;
+    const card = fieldEl.closest('.draft-card');
+    if (!card) return;
+    const draft = state.extractionDrafts.find(d => d.id === card.dataset.draftId);
+    if (!draft) return;
+
+    const field = fieldEl.dataset.draftField;
+    const value = fieldEl.value;
+    if (field === 'estimatedMinutes') {
+        const n = Number(value);
+        draft.estimatedMinutes = (Number.isFinite(n) && n >= 1 && n <= 600) ? n : 25;
+    } else if (field === 'dueDate') {
+        draft.dueDate = value || null;
+    } else if (field === 'priority') {
+        draft.priority = ['high', 'medium', 'low'].includes(value) ? value : 'medium';
+    } else {
+        draft[field] = value;
+    }
+};
+
+/**
+ * 把勾选的草稿写入工作区（复用 v3 的 todo 结构 + commit 管线）
+ * 项目名解析为 projectId（不存在则新建项目），写入后清空草稿区
+ */
+const addSelectedDrafts = () => {
+    const selected = state.extractionDrafts.filter(d => d.selected);
+    if (selected.length === 0) {
+        showToast(t('extraction.noSelection'));
+        return;
+    }
+
+    // 为每个草稿创建 todo（项目名→projectId，不存在则新建）
+    selected.forEach(draft => {
+        const projectId = resolveProjectIdForDraft(draft.project);
+        state.todos.unshift({
+            id: generateId(),
+            text: draft.title.trim(),
+            completed: false,
+            createdAt: new Date().toISOString(),
+            projectId,
+            priority: draft.priority,
+            dueDate: draft.dueDate,
+            estimateMinutes: draft.estimatedMinutes,
+            focused: false,
+            completedAt: null
+        });
+    });
+
+    commit();
+    clearExtractionResults();
+    elements.todoInput.value = '';
+    elements.todoInput.focus();
+};
+
+// ========================================
 // Initialization
 // ========================================
 
@@ -1947,16 +2310,21 @@ const init = () => {
         renderAll();
         rerenderFormPreservingDraft();
         refreshFocusOverlayOnLangChange();
+        renderExtractionResults();
     });
 
     // Attach event listeners (container-level delegation, one listener each)
     elements.todoForm.addEventListener('submit', handleQuickFormSubmit);
     elements.openDetailForm.addEventListener('click', openDetailForm);
+    elements.extractBtn.addEventListener('click', handleExtractClick);
     elements.mainColumn.addEventListener('submit', handleMainSubmit);
     elements.mainColumn.addEventListener('keydown', handleFormKeydown);
     elements.mainColumn.addEventListener('click', handleFormActionClick);
     elements.todoList.addEventListener('click', handleCardClick);
     elements.focusPanel.addEventListener('click', handleCardClick);
+    elements.extractionResults.addEventListener('click', handleExtractionClick);
+    elements.extractionResults.addEventListener('input', handleDraftFieldInput);
+    elements.extractionResults.addEventListener('change', handleDraftFieldInput);
     elements.todoList.addEventListener('dragover', handleDragOver);
     elements.todoList.addEventListener('dragleave', handleDragLeave);
     elements.todoList.addEventListener('drop', handleDrop);

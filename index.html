@@ -66,6 +66,9 @@
                         <button type="button" id="openDetailForm" class="btn btn-detail" aria-label="打开详细添加表单" data-i18n-aria="aria.openDetailForm" data-i18n="form.openDetail">
                             详细添加
                         </button>
+                        <button type="button" id="extractBtn" class="btn btn-extract" aria-label="智能拆解当前输入" data-i18n-aria="aria.extractAction" data-i18n="extraction.action">
+                            智能拆解
+                        </button>
                         <button type="submit" class="btn btn-add" aria-label="添加任务" data-i18n-aria="aria.add">
                             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <line x1="12" y1="5" x2="12" y2="19"></line>
@@ -78,6 +81,10 @@
 
                 <section id="detailFormSection" class="detail-form-section hidden" aria-label="任务详细表单" data-i18n-aria="aria.taskForm">
                     <!-- Detail add/edit form rendered by app.js -->
+                </section>
+
+                <section id="extractionResults" class="extraction-section hidden" aria-label="智能拆解结果区" data-i18n-aria="aria.extractionResults">
+                    <!-- Draft cards rendered by app.js -->
                 </section>
 
                 <section class="filters-section">

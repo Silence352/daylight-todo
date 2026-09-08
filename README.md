@@ -249,6 +249,54 @@ Have questions or suggestions?
 - Email: serkanbyx1@gmail.com
 - Website: [serkanbayraktar.com](https://serkanbayraktar.com/)
 
+## v4 Smart Task Extraction（智能拆解）
+
+v4 在 v3 专注流程基础上新增「智能拆解」能力：在顶部输入框用自然语言描述任务，点击「智能拆解」按钮，服务端调用 OpenAI 兼容模型生成可编辑的草稿卡片，用户勾选并点「添加到今日」后才会写入工作区。模型只产生草稿，绝不自动创建/删除/改写任务。
+
+### 架构
+
+- **服务端（`server/`）**：Express 入口 + `POST /api/task-extractions` 路由。模型客户端（`modelClient.js`）按 OpenAI 兼容协议请求；草稿解析与规范化（`taskExtractor.js`）为纯函数模块。密钥只在服务端 `process.env`，绝不进入前端。
+- **前端**：顶部新增「智能拆解」按钮 + 主栏 `#extractionResults` 草稿区。失败时保留用户原始输入并展示真实错误，绝不伪造草稿、绝不静默降级。
+- **测试**：`server/test/` 用 `node:test` + 内置 mock，覆盖纯函数与路由处理函数（53 项全部通过）。
+
+### 启动
+
+```bash
+# 1. 安装依赖
+npm install
+
+# 2. 配置模型密钥（复制示例并填写）
+cp .env.example .env
+# 编辑 .env 填入 MODEL_BASE_URL / MODEL_NAME / MODEL_API_KEY
+
+# 3. 启动服务
+npm start
+
+# 4. 访问
+# http://localhost:8104
+```
+
+### 环境变量
+
+| 变量 | 说明 | 示例 |
+| --- | --- | --- |
+| `PORT` | 服务监听端口（默认 8104） | `8104` |
+| `MODEL_BASE_URL` | OpenAI 兼容模型服务基础地址 | `https://api.example.com` |
+| `MODEL_NAME` | 模型名 | `gpt-4o-mini` |
+| `MODEL_API_KEY` | 模型密钥（**仅在服务端，绝不提交**） | `sk-...` |
+
+### 已知限制
+
+- 未配置 `MODEL_API_KEY` 时，点击「智能拆解」会返回 503 并提示「智能拆解未配置」，不会伪造任何草稿。
+- 模型服务不可达 / 超时 / 返回无效 JSON 时返回 502，前端保留用户输入并提示重试。
+- 草稿的「项目」字段为字符串名称：添加到今日时若名称匹配已有项目则归入，否则自动新建同名项目。
+
+### 运行测试
+
+```bash
+npm test
+```
+
 ---
 
 ⭐ If you like this project, don't forget to give it a star!

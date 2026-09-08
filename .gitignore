@@ -1,0 +1,11 @@
+# Dependencies
+node_modules/
+
+# Local environment (never commit secrets)
+.env
+
+# Logs
+*.log
+
+# Server-side runtime data (reserved for v5)
+server/data/
