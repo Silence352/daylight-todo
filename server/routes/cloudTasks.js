@@ -220,18 +220,21 @@ export const createCloudTasksRouter = (deps = {}) => {
         }
 
         const db = getDb();
-        // 先查所有权
-        const existing = db.prepare(
-            'SELECT user_id FROM cloud_tasks WHERE id = ?'
-        ).get(taskId);
+        // 复合主键 (id, user_id) 下精确查自己的行
+        const own = db.prepare(
+            'SELECT user_id FROM cloud_tasks WHERE id = ? AND user_id = ?'
+        ).get(taskId, req.user.id);
 
-        if (!existing) {
+        if (!own) {
+            // 自己没有该 id：区分"别人有"(403) 与"谁都没有"(404)，不泄露存在性细节
+            const others = db.prepare(
+                'SELECT 1 FROM cloud_tasks WHERE id = ? LIMIT 1'
+            ).get(taskId);
+            if (others) {
+                res.status(403).json({ error: 'FORBIDDEN' });
+                return;
+            }
             res.status(404).json({ error: 'NOT_FOUND' });
-            return;
-        }
-        if (existing.user_id !== req.user.id) {
-            // 所有权不匹配：403，不泄露资源存在性
-            res.status(403).json({ error: 'FORBIDDEN' });
             return;
         }
 
@@ -272,20 +275,21 @@ export const createCloudTasksRouter = (deps = {}) => {
             const row = db.prepare(
                 `SELECT id, user_id, text, completed, created_at, project_id,
                         priority, due_date, estimate_minutes, focused, completed_at
-                 FROM cloud_tasks WHERE id = ?`
-            ).get(taskId);
+                 FROM cloud_tasks WHERE id = ? AND user_id = ?`
+            ).get(taskId, req.user.id);
             res.status(200).json({ task: rowToTask(row) });
             return;
         }
 
         values.push(taskId);
-        db.prepare(`UPDATE cloud_tasks SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+        values.push(req.user.id);
+        db.prepare(`UPDATE cloud_tasks SET ${fields.join(', ')} WHERE id = ? AND user_id = ?`).run(...values);
 
         const row = db.prepare(
             `SELECT id, user_id, text, completed, created_at, project_id,
                     priority, due_date, estimate_minutes, focused, completed_at
-             FROM cloud_tasks WHERE id = ?`
-        ).get(taskId);
+             FROM cloud_tasks WHERE id = ? AND user_id = ?`
+        ).get(taskId, req.user.id);
         res.status(200).json({ task: rowToTask(row) });
     });
 
@@ -296,20 +300,25 @@ export const createCloudTasksRouter = (deps = {}) => {
         const taskId = req.params.id;
         const db = getDb();
 
-        const existing = db.prepare(
-            'SELECT user_id FROM cloud_tasks WHERE id = ?'
-        ).get(taskId);
+        // 复合主键 (id, user_id) 下精确查自己的行
+        const own = db.prepare(
+            'SELECT user_id FROM cloud_tasks WHERE id = ? AND user_id = ?'
+        ).get(taskId, req.user.id);
 
-        if (!existing) {
+        if (!own) {
+            // 自己没有该 id：区分"别人有"(403) 与"谁都没有"(404)
+            const others = db.prepare(
+                'SELECT 1 FROM cloud_tasks WHERE id = ? LIMIT 1'
+            ).get(taskId);
+            if (others) {
+                res.status(403).json({ error: 'FORBIDDEN' });
+                return;
+            }
             res.status(404).json({ error: 'NOT_FOUND' });
             return;
         }
-        if (existing.user_id !== req.user.id) {
-            res.status(403).json({ error: 'FORBIDDEN' });
-            return;
-        }
 
-        db.prepare('DELETE FROM cloud_tasks WHERE id = ?').run(taskId);
+        db.prepare('DELETE FROM cloud_tasks WHERE id = ? AND user_id = ?').run(taskId, req.user.id);
         res.status(200).json({ ok: true });
     });
 

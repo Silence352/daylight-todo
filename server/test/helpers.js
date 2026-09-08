@@ -68,6 +68,12 @@ export const createTestApp = async (options = {}) => {
     const baseUrl = `http://127.0.0.1:${port}`;
 
     const close = async () => {
+        // 先主动断开所有 keep-alive 连接（undici fetch 会保持连接池），
+        // 并 unref server 使其不再阻止进程退出（测试结束后无需继续监听）
+        if (typeof server.closeAllConnections === 'function') {
+            server.closeAllConnections();
+        }
+        server.unref();
         await new Promise((resolve) => server.close(resolve));
         closeDb();
         // 清理临时 DB 文件（含 WAL/SHM 副本）

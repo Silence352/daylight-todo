@@ -294,8 +294,35 @@
         <section id="cloudWorkspaceSection" class="cloud-workspace-section hidden" aria-label="云端工作区" data-i18n-aria="aria.cloudTaskList">
             <header class="cloud-workspace-header">
                 <h2 class="panel-title" data-i18n="account.cloudWorkspace">云端工作区</h2>
-                <span class="cloud-workspace-hint" data-i18n="account.noCloudTasks">暂无云端任务</span>
+                <div class="cloud-workspace-actions">
+                    <button type="button" id="syncBtn" class="sync-btn hidden" data-i18n="sync.action" data-i18n-aria="aria.syncAction" aria-label="同步本地任务到云端">
+                        同步本地任务
+                    </button>
+                    <span class="cloud-workspace-hint" data-i18n="account.noCloudTasks">暂无云端任务</span>
+                </div>
             </header>
+
+            <!-- v6 Local-to-Cloud Sync confirmation card (inline, shown after clicking syncBtn) -->
+            <div id="syncConfirmCard" class="sync-confirm-card hidden" role="dialog" aria-modal="false" aria-labelledby="syncConfirmTitle" data-i18n-aria="aria.syncConfirmCard">
+                <button type="button" class="sync-close" data-sync-action="close" data-i18n-aria="aria.syncClose" aria-label="关闭同步确认卡">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+                <h3 id="syncConfirmTitle" class="sync-confirm-title" data-i18n="sync.confirmTitle">确认同步到云端</h3>
+                <p id="syncConfirmHint" class="sync-confirm-hint"></p>
+                <p id="syncError" class="sync-error" role="alert"></p>
+                <div class="sync-confirm-actions">
+                    <button type="button" id="syncConfirmBtn" class="sync-confirm-btn" data-sync-action="confirm" data-i18n="sync.confirm" data-i18n-aria="aria.syncConfirm" aria-label="确认同步">
+                        确认同步
+                    </button>
+                    <button type="button" id="syncCancelBtn" class="sync-cancel-btn" data-sync-action="cancel" data-i18n="sync.cancel" data-i18n-aria="aria.syncCancel" aria-label="取消同步">
+                        取消
+                    </button>
+                </div>
+            </div>
+
             <ul id="cloudTaskList" class="cloud-task-list" aria-label="云端任务列表" data-i18n-aria="aria.cloudTaskList">
                 <!-- Cloud tasks rendered by app.js -->
             </ul>

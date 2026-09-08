@@ -70,6 +70,11 @@ export const verifyPassword = async (password, hash, salt) => {
     try {
         const saltBuf = Buffer.from(salt, 'hex');
         const hashBuf = Buffer.from(hash, 'hex');
+        // 含非法 hex 字符时 Buffer.from 会静默截断为更短缓冲，
+        // 此处校验"解析后字节数 × 2 === 原串长度"，不一致则视为非法输入
+        if (saltBuf.length * 2 !== salt.length || hashBuf.length * 2 !== hash.length) {
+            return false;
+        }
         const derived = await scrypt(password, saltBuf, hashBuf.length, SCRYPT_OPTIONS);
         // 长度不同直接返回 false，避免 timingSafeEqual 抛错
         if (derived.length !== hashBuf.length) return false;

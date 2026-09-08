@@ -26,7 +26,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 /** 当前 schema 版本（与迁移列表长度对应） */
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 /**
  * 迁移列表：每个迁移是一次性 DDL，按顺序执行。
@@ -74,6 +74,37 @@ const MIGRATIONS = [
                 completed_at TEXT,
                 FOREIGN KEY (user_id) REFERENCES users(id)
             );
+        `
+    },
+    {
+        // v6: 把 cloud_tasks 主键从全局 id 改为复合 (id, user_id)，
+        // 使不同用户可以持有相同 id 的任务（本地→云端同步的跨账号隔离前提）。
+        // 重建表：建新表 → 拷贝 → 删旧 → 改名。
+        name: '004_cloud_tasks_composite_pk',
+        sql: `
+            CREATE TABLE IF NOT EXISTS cloud_tasks_v6 (
+                id TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                text TEXT NOT NULL,
+                completed INTEGER NOT NULL,
+                created_at TEXT NOT NULL,
+                project_id TEXT,
+                priority TEXT,
+                due_date TEXT,
+                estimate_minutes INTEGER,
+                focused INTEGER,
+                completed_at TEXT,
+                PRIMARY KEY (id, user_id),
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            );
+            INSERT INTO cloud_tasks_v6
+                (id, user_id, text, completed, created_at, project_id,
+                 priority, due_date, estimate_minutes, focused, completed_at)
+            SELECT id, user_id, text, completed, created_at, project_id,
+                   priority, due_date, estimate_minutes, focused, completed_at
+            FROM cloud_tasks;
+            DROP TABLE cloud_tasks;
+            ALTER TABLE cloud_tasks_v6 RENAME TO cloud_tasks;
         `
     }
 ];

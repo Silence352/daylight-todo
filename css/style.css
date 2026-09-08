@@ -2755,3 +2755,223 @@ body {
         transition: none !important;
     }
 }
+
+/* ========================================
+   v6 Local-to-Cloud Sync — 同步入口 + 确认卡
+   复用晨光 token：--surface-solid / --accent-* / --radius-* / --shadow-*
+   ======================================== */
+
+/* Header 右侧操作区：同步按钮 + 提示文案 */
+.cloud-workspace-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+/* 同步入口按钮（晨光渐变主按钮，醒目） */
+.sync-btn {
+    font-family: var(--font-primary);
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--color-on-accent);
+    background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-accent-soft) 100%);
+    border: none;
+    border-radius: var(--border-radius-full);
+    padding: 7px 16px;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(234, 138, 12, 0.28);
+    transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.sync-btn:hover {
+    box-shadow: 0 4px 14px rgba(234, 138, 12, 0.38);
+    transform: translateY(-1px);
+}
+
+.sync-btn:active {
+    transform: translateY(0);
+}
+
+.sync-btn:focus-visible {
+    outline: none;
+    box-shadow: var(--shadow-glow), 0 2px 8px rgba(234, 138, 12, 0.28);
+}
+
+/* 同步确认卡（内联卡片，非模态遮罩） */
+.sync-confirm-card {
+    position: relative;
+    margin-bottom: 16px;
+    padding: 24px 28px 22px;
+    background: var(--surface-solid);
+    border: 1px solid var(--color-border-light);
+    border-radius: var(--border-radius-lg);
+    box-shadow: var(--shadow-md);
+    animation: syncCardIn 280ms ease forwards;
+}
+
+@keyframes syncCardIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* 关闭按钮（复用 auth-close 风格） */
+.sync-close {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 30px;
+    height: 30px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    border-radius: var(--border-radius-full);
+    color: var(--color-text-muted);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.sync-close svg {
+    width: 16px;
+    height: 16px;
+}
+
+.sync-close:hover {
+    background: var(--color-accent-dim);
+    color: var(--color-accent-strong);
+}
+
+.sync-close:focus-visible {
+    outline: none;
+    box-shadow: var(--shadow-glow);
+}
+
+.sync-confirm-title {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin-bottom: 8px;
+    padding-right: 28px;
+}
+
+.sync-confirm-hint {
+    font-size: 0.86rem;
+    color: var(--color-text-secondary);
+    line-height: 1.5;
+    margin-bottom: 14px;
+}
+
+/* 错误文案 */
+.sync-error {
+    min-height: 1.2em;
+    font-size: 0.82rem;
+    color: var(--color-danger);
+    line-height: 1.4;
+    margin-bottom: 10px;
+}
+
+.sync-error:empty {
+    min-height: 0;
+    margin-bottom: 0;
+}
+
+/* 按钮组 */
+.sync-confirm-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+/* 确认按钮（主按钮，晨光渐变） */
+.sync-confirm-btn {
+    font-family: var(--font-primary);
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--color-on-accent);
+    background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-accent-soft) 100%);
+    border: none;
+    border-radius: var(--border-radius-md);
+    padding: 9px 20px;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(234, 138, 12, 0.28);
+    transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.sync-confirm-btn:hover {
+    box-shadow: 0 4px 14px rgba(234, 138, 12, 0.38);
+    transform: translateY(-1px);
+}
+
+.sync-confirm-btn:active {
+    transform: translateY(0);
+}
+
+.sync-confirm-btn:focus-visible {
+    outline: none;
+    box-shadow: var(--shadow-glow), 0 2px 8px rgba(234, 138, 12, 0.28);
+}
+
+.sync-confirm-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* 取消按钮（次按钮，透明底 + 边框） */
+.sync-cancel-btn {
+    font-family: var(--font-primary);
+    font-size: 0.88rem;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    background: transparent;
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-md);
+    padding: 9px 18px;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.sync-cancel-btn:hover {
+    border-color: var(--color-accent-border);
+    color: var(--color-text-primary);
+}
+
+.sync-cancel-btn:focus-visible {
+    outline: none;
+    box-shadow: var(--shadow-glow);
+}
+
+.sync-cancel-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Responsive — Sync */
+@media (max-width: 480px) {
+    .sync-confirm-card {
+        padding: 22px 18px 18px;
+    }
+
+    .sync-confirm-actions {
+        flex-direction: column-reverse;
+    }
+
+    .sync-confirm-btn,
+    .sync-cancel-btn {
+        width: 100%;
+    }
+}
+
+/* Reduced motion — Sync */
+@media (prefers-reduced-motion: reduce) {
+    .sync-btn,
+    .sync-confirm-card,
+    .sync-close,
+    .sync-confirm-btn,
+    .sync-cancel-btn {
+        animation: none !important;
+        transition: none !important;
+    }
+}

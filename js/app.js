@@ -27,7 +27,9 @@ const state = {
     // v5 Account & Cloud Workspace
     auth: { user: null, loading: false },
     cloudTasks: [],
-    authModalTab: 'login'
+    authModalTab: 'login',
+    // v6 Local-to-Cloud Sync
+    sync: { confirming: false, loading: false, error: null }
 };
 
 // Local Storage key & schema version
@@ -89,7 +91,14 @@ const elements = {
     authRegisterForm: document.getElementById('authRegisterForm'),
     authTabs: document.querySelectorAll('.auth-tab'),
     cloudWorkspaceSection: document.getElementById('cloudWorkspaceSection'),
-    cloudTaskList: document.getElementById('cloudTaskList')
+    cloudTaskList: document.getElementById('cloudTaskList'),
+    // v6 Local-to-Cloud Sync
+    syncBtn: document.getElementById('syncBtn'),
+    syncConfirmCard: document.getElementById('syncConfirmCard'),
+    syncConfirmHint: document.getElementById('syncConfirmHint'),
+    syncError: document.getElementById('syncError'),
+    syncConfirmBtn: document.getElementById('syncConfirmBtn'),
+    syncCancelBtn: document.getElementById('syncCancelBtn')
 };
 
 // ========================================
@@ -811,6 +820,8 @@ const commit = () => {
     renderFocusPanel();
     renderTodos();
     updateStats();
+    // v6: 本地任务数量变化时同步入口可见性也变化
+    renderSyncEntry();
 };
 
 /**
@@ -822,6 +833,7 @@ const renderAll = () => {
     renderFocusPanel();
     renderTodos();
     updateStats();
+    renderSyncEntry();
 };
 
 /**
@@ -2482,6 +2494,12 @@ const handleLogout = async () => {
     }
     state.auth.user = null;
     state.cloudTasks = [];
+    // v6: 退出时关闭同步确认卡并重置同步态
+    state.sync.confirming = false;
+    state.sync.loading = false;
+    state.sync.error = null;
+    elements.syncConfirmCard.classList.add('hidden');
+    if (elements.syncError) elements.syncError.textContent = '';
     updateAuthUI();
     renderCloudWorkspace();
     showToast(t('account.logoutSuccess'));
@@ -2633,6 +2651,7 @@ const renderCloudWorkspace = () => {
     if (!state.auth.user) {
         elements.cloudWorkspaceSection.classList.add('hidden');
         elements.cloudTaskList.innerHTML = '';
+        renderSyncEntry();
         return;
     }
 
@@ -2640,10 +2659,12 @@ const renderCloudWorkspace = () => {
 
     if (state.cloudTasks.length === 0) {
         elements.cloudTaskList.innerHTML = `<li class="cloud-empty">${t('account.noCloudTasks')}</li>`;
+        renderSyncEntry();
         return;
     }
 
     elements.cloudTaskList.innerHTML = state.cloudTasks.map(createCloudTaskHTML).join('');
+    renderSyncEntry();
 };
 
 /**
@@ -2662,6 +2683,8 @@ const updateAuthUI = () => {
         elements.authBtn.textContent = t('account.signInToSync');
         elements.authLogoutBtn.classList.add('hidden');
     }
+    // v6: 登录态变化时同步入口可见性也变化
+    renderSyncEntry();
 };
 
 /**
@@ -2717,6 +2740,157 @@ const handleCloudTaskClick = (event) => {
     }
 };
 
+// ========================================
+// v6 Local-to-Cloud Sync
+// 显式同步 + 追加合并 + 不可变 ID 去重 + 服务端幂等 + 不删本地
+// ========================================
+
+/**
+ * 是否应展示同步入口：已登录且本地有任务
+ * @returns {boolean}
+ */
+const canSync = () => !!state.auth.user && state.todos.length > 0;
+
+/**
+ * 根据登录态与本地任务数量切换同步按钮可见性
+ * 在 commit / renderAll / updateAuthUI / renderCloudWorkspace 中调用
+ */
+const renderSyncEntry = () => {
+    if (!elements.syncBtn) return;
+    elements.syncBtn.classList.toggle('hidden', !canSync());
+};
+
+/**
+ * 打开同步确认卡：展示即将同步的本地任务数量，未确认不上传
+ */
+const openSyncConfirm = () => {
+    if (!canSync()) return;
+    if (state.sync.loading) return;
+    state.sync.confirming = true;
+    state.sync.error = null;
+    if (elements.syncError) elements.syncError.textContent = '';
+    if (elements.syncConfirmHint) {
+        elements.syncConfirmHint.textContent = t('sync.confirmHint', { n: state.todos.length });
+    }
+    elements.syncConfirmCard.classList.remove('hidden');
+    // 聚焦确认按钮，方便键盘用户
+    if (elements.syncConfirmBtn) elements.syncConfirmBtn.focus();
+};
+
+/**
+ * 关闭同步确认卡并清空错误态（不中断进行中的请求）
+ */
+const closeSyncConfirm = () => {
+    if (state.sync.loading) return; // 同步进行中不允许关闭
+    state.sync.confirming = false;
+    state.sync.error = null;
+    elements.syncConfirmCard.classList.add('hidden');
+    if (elements.syncError) elements.syncError.textContent = '';
+};
+
+/**
+ * 在确认卡里显示一条错误文案（双语由 t() 处理）
+ * @param {string} message - 已翻译的文案
+ */
+const showSyncError = (message) => {
+    if (elements.syncError) elements.syncError.textContent = message;
+};
+
+/**
+ * 执行同步：POST /api/cloud/sync { tasks: state.todos }
+ * - 成功：不删本地任务，展示双语结果反馈，刷新云端工作区，关闭确认卡
+ * - 失败：展示错误（双语），保留确认卡可重试
+ */
+const performSync = async () => {
+    if (!canSync()) return;
+    if (state.sync.loading) return;
+
+    state.sync.loading = true;
+    if (elements.syncConfirmBtn) elements.syncConfirmBtn.disabled = true;
+    if (elements.syncCancelBtn) elements.syncCancelBtn.disabled = true;
+    if (elements.syncConfirmBtn) elements.syncConfirmBtn.textContent = t('sync.syncing');
+    showSyncError('');
+
+    try {
+        const response = await fetch('/api/cloud/sync', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept-Language': currentLang === 'en' ? 'en' : 'zh'
+            },
+            body: JSON.stringify({ tasks: state.todos })
+        });
+
+        const data = await response.json().catch(() => null);
+
+        if (!response.ok || !data) {
+            const code = data && data.error ? data.error : 'NETWORK';
+            showSyncError(t(code === 'UNAUTHORIZED' ? 'account.errorInvalidCredentials' : 'sync.error'));
+            return;
+        }
+
+        // 成功：双语结果反馈（不删本地任务）
+        showToast(t('sync.successDetail', {
+            added: data.added ?? 0,
+            skipped: data.skipped ?? 0,
+            total: data.total ?? 0
+        }));
+
+        // 关闭确认卡
+        state.sync.confirming = false;
+        state.sync.error = null;
+        elements.syncConfirmCard.classList.add('hidden');
+        if (elements.syncError) elements.syncError.textContent = '';
+
+        // 刷新云端工作区列表
+        await fetchCloudTasks();
+    } catch (error) {
+        console.error('Sync request failed:', error);
+        showSyncError(t('sync.errorNetwork'));
+    } finally {
+        state.sync.loading = false;
+        if (elements.syncConfirmBtn) {
+            elements.syncConfirmBtn.disabled = false;
+            elements.syncConfirmBtn.textContent = t('sync.confirm');
+        }
+        if (elements.syncCancelBtn) elements.syncCancelBtn.disabled = false;
+    }
+};
+
+/**
+ * 同步确认卡点击委托：close / cancel / confirm
+ * @param {Event} event
+ */
+const handleSyncConfirmClick = (event) => {
+    const actionEl = event.target.closest('[data-sync-action]');
+    if (!actionEl) return;
+    const action = actionEl.dataset.syncAction;
+    if (action === 'close' || action === 'cancel') {
+        closeSyncConfirm();
+    } else if (action === 'confirm') {
+        performSync();
+    }
+};
+
+/**
+ * 同步确认卡键盘：Escape 关闭（同步进行中除外）
+ * @param {KeyboardEvent} event
+ */
+const handleSyncConfirmKeydown = (event) => {
+    if (event.key !== 'Escape') return;
+    if (!elements.syncConfirmCard.classList.contains('hidden')) {
+        event.preventDefault();
+        closeSyncConfirm();
+    }
+};
+
+/**
+ * 同步按钮点击：打开确认卡
+ */
+const handleSyncBtnClick = () => {
+    openSyncConfirm();
+};
+
 /**
  * 初始化账号模块：GET /api/auth/me → 若登录设 state.auth.user + 拉云任务 + 更新页头
  * 未登录保持本地优先（v4 行为不变）
@@ -2740,6 +2914,11 @@ const initAuth = async () => {
     elements.authRegisterForm.addEventListener('submit', handleAuthSubmit);
     elements.cloudTaskList.addEventListener('click', handleCloudTaskClick);
 
+    // v6 Sync: 同步入口 + 确认卡
+    elements.syncBtn.addEventListener('click', handleSyncBtnClick);
+    elements.syncConfirmCard.addEventListener('click', handleSyncConfirmClick);
+    elements.syncConfirmCard.addEventListener('keydown', handleSyncConfirmKeydown);
+
     // 页面加载时探测登录态（非阻断：失败按未登录处理，本地优先）
     try {
         const response = await fetch('/api/auth/me', {
@@ -2759,11 +2938,19 @@ const initAuth = async () => {
 };
 
 /**
- * 语言切换时重渲染账号入口与云端工作区
+ * 语言切换时重渲染账号入口、云端工作区与同步确认卡动态文案
  */
 const refreshAuthOnLangChange = () => {
     updateAuthUI();
     renderCloudWorkspace();
+    // v6: 确认卡 hint 是 JS 动态设置的，语言切换时需刷新
+    if (elements.syncConfirmHint && state.sync.confirming) {
+        elements.syncConfirmHint.textContent = t('sync.confirmHint', { n: state.todos.length });
+    }
+    // 同步按钮文案在 loading 时被改为 "同步中…"，语言切换时按当前态恢复
+    if (elements.syncConfirmBtn) {
+        elements.syncConfirmBtn.textContent = state.sync.loading ? t('sync.syncing') : t('sync.confirm');
+    }
 };
 
 // ========================================

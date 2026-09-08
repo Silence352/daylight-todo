@@ -10,6 +10,7 @@
  *   - POST /api/task-extractions（v4 智能拆解）
  *   - /api/auth/*（v5 注册/登录/退出/me）
  *   - /api/cloud/tasks（v5 云端任务 CRUD）
+ *   - POST /api/cloud/sync（v6 本地→云端显式同步，追加合并 + 不可变 ID 去重 + 幂等）
  *
  * 密钥只在服务端 process.env 中读取，绝不写入前端产物。
  */
@@ -20,6 +21,7 @@ import { fileURLToPath } from 'node:url';
 import { createTaskExtractionsRouter } from './routes/taskExtractions.js';
 import { createAuthRouter } from './routes/auth.js';
 import { createCloudTasksRouter } from './routes/cloudTasks.js';
+import { createSyncRouter } from './routes/sync.js';
 import { runMigrations, closeDb } from './db/database.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -52,6 +54,7 @@ export const createApp = (options = {}) => {
     app.use('/api/task-extractions', createTaskExtractionsRouter({ env }));
     app.use('/api/auth', createAuthRouter({ env }));
     app.use('/api/cloud/tasks', createCloudTasksRouter({ env }));
+    app.use('/api/cloud', createSyncRouter({ env }));
 
     // 静态资源：前端根目录（index.html / css / js）
     app.use(express.static(STATIC_ROOT, {
@@ -92,7 +95,7 @@ if (isMain) {
     const app = createApp();
     const server = app.listen(PORT, () => {
         // 不输出任何密钥或环境敏感值
-        console.log(`[v5] Daylight To-Do server listening on http://localhost:${PORT}`);
+        console.log(`[v6] Daylight To-Do server listening on http://localhost:${PORT}`);
     });
 
     // 优雅关闭：关闭数据库连接

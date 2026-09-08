@@ -214,7 +214,25 @@ const I18N_MESSAGES = {
         'aria.authConfirmPassword': '确认密码输入',
         'aria.authSubmit': '提交',
         'aria.authClose': '关闭对话框',
-        'aria.cloudTaskList': '云端任务列表'
+        'aria.cloudTaskList': '云端任务列表',
+
+        // Local-to-Cloud Sync (v6) — 显式同步 + 追加合并 + 不可变 ID 去重
+        'sync.action': '同步本地任务',
+        'sync.confirmTitle': '确认同步到云端',
+        'sync.confirmHint': '即将同步 {n} 个本地任务到云端。已存在的任务（按 ID 判断）将被跳过，不会被覆盖。',
+        'sync.confirm': '确认同步',
+        'sync.cancel': '取消',
+        'sync.syncing': '同步中…',
+        'sync.success': '同步完成',
+        'sync.successDetail': '已同步 {added} 个任务，跳过 {skipped} 个已存在，云端共 {total} 个',
+        'sync.error': '同步失败，请稍后重试',
+        'sync.errorNetwork': '网络错误，请确认服务已启动后再试',
+        'sync.noLocalTasks': '没有可同步的本地任务',
+        'aria.syncAction': '同步本地任务到云端',
+        'aria.syncConfirmCard': '同步确认卡',
+        'aria.syncConfirm': '确认同步',
+        'aria.syncCancel': '取消同步',
+        'aria.syncClose': '关闭同步确认卡'
     },
     en: {
         'meta.title': 'Daylight To-Do',
@@ -413,7 +431,25 @@ const I18N_MESSAGES = {
         'aria.authConfirmPassword': 'Confirm password input',
         'aria.authSubmit': 'Submit',
         'aria.authClose': 'Close dialog',
-        'aria.cloudTaskList': 'Cloud task list'
+        'aria.cloudTaskList': 'Cloud task list',
+
+        // Local-to-Cloud Sync (v6) — explicit sync + append-merge + immutable ID dedup
+        'sync.action': 'Sync local tasks',
+        'sync.confirmTitle': 'Confirm sync to cloud',
+        'sync.confirmHint': 'About to sync {n} local task(s) to the cloud. Existing tasks (matched by ID) will be skipped, not overwritten.',
+        'sync.confirm': 'Confirm sync',
+        'sync.cancel': 'Cancel',
+        'sync.syncing': 'Syncing...',
+        'sync.success': 'Sync complete',
+        'sync.successDetail': 'Synced {added} task(s), skipped {skipped} existing, {total} total in cloud',
+        'sync.error': 'Sync failed, please try again later',
+        'sync.errorNetwork': 'Network error, please make sure the server is running and try again',
+        'sync.noLocalTasks': 'No local tasks to sync',
+        'aria.syncAction': 'Sync local tasks to cloud',
+        'aria.syncConfirmCard': 'Sync confirmation card',
+        'aria.syncConfirm': 'Confirm sync',
+        'aria.syncCancel': 'Cancel sync',
+        'aria.syncClose': 'Close sync confirmation card'
     }
 };
 
