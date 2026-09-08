@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="待办 · 晨光 —— 简洁明亮的任务清单，规划你的每一天">
+    <meta name="description" content="待办 · 晨光 Daily Dashboard —— 项目导航、今日焦点与任务流、工作节奏洞察">
     <title>待办 · 晨光</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -11,7 +11,7 @@
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-    <div class="app-container">
+    <div class="app-container dashboard">
         <!-- Header Section -->
         <header class="app-header">
             <div class="lang-switch" role="group" data-i18n-aria="aria.langSwitch">
@@ -22,89 +22,158 @@
             <p class="app-subtitle" data-i18n="app.subtitle">规划你的任务，从容开启每一天。</p>
         </header>
 
-        <!-- Add Todo Section -->
-        <section class="add-todo-section">
-            <form id="todoForm" class="todo-form">
-                <input 
-                    type="text" 
-                    id="todoInput" 
-                    class="todo-input" 
-                    placeholder="添加新任务…"
-                    autocomplete="off"
-                    maxlength="150"
-                    aria-label="添加新任务"
-                    data-i18n-placeholder="placeholder.addTask"
-                    data-i18n-aria="aria.addInput"
-                >
-                <button type="submit" class="btn btn-add" aria-label="添加任务" data-i18n-aria="aria.add">
-                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="12" y1="5" x2="12" y2="19"></line>
-                        <line x1="5" y1="12" x2="19" y2="12"></line>
-                    </svg>
-                    <span data-i18n="btn.add">添加</span>
-                </button>
-            </form>
-        </section>
+        <div class="dashboard-grid">
+            <!-- Left column: project navigation -->
+            <aside id="projectNav" class="panel project-nav">
+                <h2 class="panel-title" data-i18n="nav.title">项目导航</h2>
+                <ul id="navEntryList" class="nav-entry-list" aria-label="项目列表" data-i18n-aria="aria.projectList">
+                    <!-- Navigation entries rendered by app.js -->
+                </ul>
+                <form id="projectForm" class="project-form">
+                    <input
+                        type="text"
+                        id="projectInput"
+                        class="project-input"
+                        maxlength="30"
+                        autocomplete="off"
+                        placeholder="新建项目…"
+                        aria-label="项目名称输入"
+                        data-i18n-placeholder="nav.newProjectPlaceholder"
+                        data-i18n-aria="aria.projectInput"
+                    >
+                    <button type="submit" class="btn btn-project-add" aria-label="添加项目" data-i18n-aria="aria.addProject" data-i18n="nav.addProject">
+                        添加
+                    </button>
+                </form>
+                <p id="projectError" class="form-error" role="alert"></p>
+            </aside>
 
-        <!-- Filters Section -->
-        <section class="filters-section">
-            <div class="filter-buttons" role="tablist" aria-label="任务筛选" data-i18n-aria="aria.filters">
-                <button 
-                    class="filter-btn active" 
-                    data-filter="all" 
-                    role="tab" 
-                    aria-selected="true"
-                    data-i18n="filter.all"
-                >
-                    全部
-                </button>
-                <button 
-                    class="filter-btn" 
-                    data-filter="active" 
-                    role="tab" 
-                    aria-selected="false"
-                    data-i18n="filter.active"
-                >
-                    进行中
-                </button>
-                <button 
-                    class="filter-btn" 
-                    data-filter="completed" 
-                    role="tab" 
-                    aria-selected="false"
-                    data-i18n="filter.completed"
-                >
-                    已完成
-                </button>
-            </div>
-            <div class="todo-stats">
-                <span id="todoCount" class="todo-count">0 项任务</span>
-            </div>
-        </section>
+            <!-- Center column: quick add, detail form, filters, focus, task flow -->
+            <main id="mainColumn" class="main-column">
+                <section class="quick-add-section">
+                    <form id="todoForm" class="todo-form">
+                        <input
+                            type="text"
+                            id="todoInput"
+                            class="todo-input"
+                            placeholder="添加新任务…"
+                            autocomplete="off"
+                            maxlength="150"
+                            aria-label="添加新任务"
+                            data-i18n-placeholder="placeholder.addTask"
+                            data-i18n-aria="aria.addInput"
+                        >
+                        <button type="button" id="openDetailForm" class="btn btn-detail" aria-label="打开详细添加表单" data-i18n-aria="aria.openDetailForm" data-i18n="form.openDetail">
+                            详细添加
+                        </button>
+                        <button type="submit" class="btn btn-add" aria-label="添加任务" data-i18n-aria="aria.add">
+                            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="12" y1="5" x2="12" y2="19"></line>
+                                <line x1="5" y1="12" x2="19" y2="12"></line>
+                            </svg>
+                            <span data-i18n="btn.add">添加</span>
+                        </button>
+                    </form>
+                </section>
 
-        <!-- Todo List Section -->
-        <section class="todo-list-section">
-            <ul id="todoList" class="todo-list" aria-label="任务列表" data-i18n-aria="aria.todoList">
-                <!-- Todo items will be rendered here -->
-            </ul>
-            <div id="emptyState" class="empty-state">
-                <div class="empty-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                        <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
-                        <path d="M9 14l2 2 4-4"></path>
+                <section id="detailFormSection" class="detail-form-section hidden" aria-label="任务详细表单" data-i18n-aria="aria.taskForm">
+                    <!-- Detail add/edit form rendered by app.js -->
+                </section>
+
+                <section class="filters-section">
+                    <div class="filter-buttons" role="tablist" aria-label="任务筛选" data-i18n-aria="aria.filters">
+                        <button
+                            class="filter-btn active"
+                            data-filter="all"
+                            role="tab"
+                            aria-selected="true"
+                            data-i18n="filter.all"
+                        >
+                            全部
+                        </button>
+                        <button
+                            class="filter-btn"
+                            data-filter="active"
+                            role="tab"
+                            aria-selected="false"
+                            data-i18n="filter.active"
+                        >
+                            进行中
+                        </button>
+                        <button
+                            class="filter-btn"
+                            data-filter="completed"
+                            role="tab"
+                            aria-selected="false"
+                            data-i18n="filter.completed"
+                        >
+                            已完成
+                        </button>
+                    </div>
+                    <div class="todo-stats">
+                        <span id="todoCount" class="todo-count">0 项任务</span>
+                    </div>
+                </section>
+
+                <section id="focusSection" class="focus-section">
+                    <h2 class="section-title" data-i18n="focus.title">今日焦点</h2>
+                    <div id="focusPanel" class="focus-panel" aria-label="今日焦点区" data-i18n-aria="aria.focusPanel">
+                        <!-- Focus items rendered by app.js -->
+                    </div>
+                </section>
+
+                <section class="todo-list-section">
+                    <ul id="todoList" class="todo-list" aria-label="任务列表" data-i18n-aria="aria.todoList">
+                        <!-- Todo items will be rendered here -->
+                    </ul>
+                    <div id="emptyState" class="empty-state">
+                        <div class="empty-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+                                <path d="M9 14l2 2 4-4"></path>
+                            </svg>
+                        </div>
+                        <p class="empty-text">还没有任务</p>
+                        <p class="empty-hint">在上方输入框写下你的第一个任务吧</p>
+                    </div>
+                </section>
+
+                <footer class="app-footer">
+                    <button id="clearCompleted" class="btn btn-clear" aria-label="清除已完成任务" data-i18n="btn.clearCompleted" data-i18n-aria="aria.clearCompleted">
+                        清除已完成
+                    </button>
+                </footer>
+            </main>
+
+            <!-- Right column: pace & insights -->
+            <aside id="insightPanel" class="panel insight-panel">
+                <h2 class="panel-title" data-i18n="insight.title">工作节奏</h2>
+                <h3 class="insight-subtitle" data-i18n="insight.todayProgress">今日进度</h3>
+                <div class="progress-ring" id="progressRing" role="img" aria-label="今日进度 0%，已完成 0 项，共 0 项">
+                    <svg viewBox="0 0 120 120" aria-hidden="true" focusable="false">
+                        <circle class="ring-track" cx="60" cy="60" r="52"></circle>
+                        <circle class="ring-progress" id="ringProgress" cx="60" cy="60" r="52"></circle>
                     </svg>
+                    <span class="ring-center" id="ringPercent">0%</span>
                 </div>
-                <p class="empty-text" data-i18n="empty.text">还没有任务</p>
-                <p class="empty-hint" data-i18n="empty.hint">在上方输入框写下你的第一个任务吧</p>
-            </div>
-        </section>
-
-        <!-- Footer Section -->
-        <footer class="app-footer">
-            <button id="clearCompleted" class="btn btn-clear" aria-label="清除已完成任务" data-i18n="btn.clearCompleted" data-i18n-aria="aria.clearCompleted">
-                清除已完成
-            </button>
-        </footer>
+                <p class="ring-summary" id="ringSummary">已完成 0 · 共 0</p>
+                <p class="done-left-summary" id="doneLeftSummary">0 已完成 · 0 剩余</p>
+                <ul class="insight-list" aria-label="洞察指标" data-i18n-aria="aria.insightList">
+                    <li class="insight-item">
+                        <span class="insight-label" data-i18n="insight.doneToday">今日完成</span>
+                        <span class="insight-value" id="insightDoneToday">0</span>
+                    </li>
+                    <li class="insight-item">
+                        <span class="insight-label" data-i18n="insight.overdue">逾期未完成</span>
+                        <span class="insight-value" id="insightOverdue">0</span>
+                    </li>
+                    <li class="insight-item">
+                        <span class="insight-label" data-i18n="insight.highOpen">高优先级待办</span>
+                        <span class="insight-value" id="insightHighOpen">0</span>
+                    </li>
+                </ul>
+            </aside>
+        </div>
     </div>
 
     <script src="js/i18n.js"></script>
