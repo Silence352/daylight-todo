@@ -1,6 +1,6 @@
 {
   "name": "simple-to-do-list-v5",
-  "version": "5.0.0",
+  "version": "6.0.0",
   "private": true,
   "type": "module",
   "description": "Daylight To-Do v5 — Accounts and Cloud Workspace (Express + SQLite + auth + cloud tasks)",
