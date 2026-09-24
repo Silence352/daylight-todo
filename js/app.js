@@ -101,6 +101,15 @@ const elements = {
     syncCancelBtn: document.getElementById('syncCancelBtn')
 };
 
+// The account dialog is authored beside its trigger in the header, but a
+// transformed header becomes the containing block for `position: fixed`.
+// Mount it at the document root so its overlay always covers the viewport.
+const mountAuthModalAtDocumentRoot = () => {
+    if (elements.authModal && elements.authModal.parentElement !== document.body) {
+        document.body.append(elements.authModal);
+    }
+};
+
 // ========================================
 // Local Storage Functions (envelope + migration)
 // ========================================
@@ -2896,6 +2905,7 @@ const handleSyncBtnClick = () => {
  * 未登录保持本地优先（v4 行为不变）
  */
 const initAuth = async () => {
+    mountAuthModalAtDocumentRoot();
     updateAuthUI();
 
     // 静态绑定事件（一次性）

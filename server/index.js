@@ -16,6 +16,7 @@
  */
 
 import express from 'express';
+import dotenv from 'dotenv';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createTaskExtractionsRouter } from './routes/taskExtractions.js';
@@ -26,6 +27,13 @@ import { runMigrations, closeDb } from './db/database.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// 从项目根目录加载本地配置；系统环境变量优先，避免部署配置被 .env 覆盖。
+dotenv.config({
+    path: path.resolve(__dirname, '..', '.env'),
+    override: false,
+    quiet: true
+});
 
 /**
  * 创建 Express app（不启动监听）。
